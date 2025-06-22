@@ -3,6 +3,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { ethers } = require('ethers');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
 
 const app = express();
 
@@ -17,6 +19,18 @@ const limiter = rateLimit({
     max: 100 // limit each IP to 100 requests per windowMs
 });
 app.use('/api/', limiter);
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Lotwise API Documentation'
+}));
+
+// Redirect root to API documentation
+app.get('/', (req, res) => {
+    res.redirect('/api-docs');
+});
 
 // Mock database for demonstration
 const mockDB = {
@@ -140,6 +154,23 @@ const mockDB = {
 
 // Routes
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the current health status of the API server and available features
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthStatus'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 // Health check
 app.get('/health', (req, res) => {
     res.json({ 
@@ -156,6 +187,55 @@ app.get('/health', (req, res) => {
     });
 });
 
+/**
+ * @swagger
+ * /api/properties:
+ *   get:
+ *     summary: Get all properties
+ *     description: Retrieve a list of all available properties in the platform
+ *     tags: [Properties]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of properties to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of properties to skip
+ *       - in: query
+ *         name: verified
+ *         schema:
+ *           type: boolean
+ *         description: Filter by verification status
+ *     responses:
+ *       200:
+ *         description: List of properties retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 properties:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Property'
+ *                 total:
+ *                   type: number
+ *                   example: 2
+ *                 limit:
+ *                   type: number
+ *                   example: 10
+ *                 offset:
+ *                   type: number
+ *                   example: 0
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 // Property routes
 app.get('/api/properties', (req, res) => {
     const { limit = 10, offset = 0, verified } = req.query;
@@ -205,6 +285,34 @@ app.post('/api/properties/:id/verify', (req, res) => {
     }, 1000);
 });
 
+/**
+ * @swagger
+ * /api/users/{address}:
+ *   get:
+ *     summary: Get user profile
+ *     description: Retrieve user profile information including token holdings and Aave positions
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^0x[a-fA-F0-9]{40}$'
+ *         description: Ethereum address of the user
+ *         example: '0x1234567890abcdef1234567890abcdef12345678'
+ *     responses:
+ *       200:
+ *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 // User portfolio routes
 app.get('/api/users/:address', (req, res) => {
     const { address } = req.params;
