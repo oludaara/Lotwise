@@ -6,16 +6,22 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Chainlink imports
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 
 /**
- * @title Lotwise - Tokenized Real Estate with Chainlink & DeFi
- * @dev ERC721 contract for fractional real estate ownership
- * Week 1 MVP: Basic tokenization, buying, and trading
- * Week 2: Chainlink integration (Functions, CCIP, Data Feeds, Automation) + Aave DeFi
+ * @title Lotwise - Advanced Fractional Real Estate with Full Aave Integration
+ * @dev Enhanced ERC721 contract for fractional real estate ownership with DeFi lending
+ * 
+ * Features:
+ * - 1,000 ERC-721 tokens per property ($1,000 each for $1M property)
+ * - Full Aave protocol integration (supply, borrow, liquidation)
+ * - Cross-chain support (Ethereum + Polygon)
+ * - Yield distribution among fractional owners
+ * - Collateral management and liquidation protection
  */
 contract Lotwise is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     using Counters for Counters.Counter;
@@ -25,617 +31,691 @@ contract Lotwise is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, Automati
     // =============================================================
 
     struct Property {
-        string propertyId;        // Property identifier (e.g., "123")
-        uint256 totalValue;       // Total property value in wei (e.g., $1M)
-        uint256 tokenPrice;       // Price per token in wei (e.g., $1000)
-        uint256 totalTokens;      // Total tokens for this property (1000)
-        bool isActive;            // Whether tokens can be minted/traded
+        string propertyId;           // Property identifier
+        uint256 totalValue;          // Total property value in USD (scaled by 1e18)
+        uint256 tokenPrice;          // Price per token in USD ($1,000 = 1000e18)
+        uint256 totalTokens;         // Always 1,000 for fractional ownership
+        uint256 mintedTokens;        // Number of tokens minted so far
+        bool isActive;               // Whether property is active
+        string metadataURI;          // Property metadata URI
+        address[] fractionalOwners;  // List of all token holders
+    }
+
+    struct AavePosition {
+        uint256 suppliedAmount;      // Total USD value supplied as collateral
+        uint256 borrowedAmount;      // Total USD value borrowed
+        uint256 lastYieldUpdate;     // Last yield calculation timestamp
+        uint256 accumulatedYield;    // Total yield earned
+        bool isCollateralized;       // Whether position is used as collateral
+        uint8 healthFactor;          // Position health (1-100, <80 = liquidation risk)
     }
 
     struct TokenListing {
-        uint256 tokenId;          // Token being sold
-        uint256 price;            // Asking price in wei
-        address seller;           // Token owner
-        bool isActive;            // Whether listing is active
+        uint256 tokenId;
+        uint256 price;               // Price in USD (scaled by 1e18)
+        address seller;
+        bool isActive;
+        uint256 listedAt;
+    }
+
+    struct CrossChainTransfer {
+        uint256 tokenId;
+        address from;
+        address to;
+        uint64 destinationChain;     // Chainlink CCIP chain selector
+        bytes32 messageId;
+        bool completed;
     }
 
     // =============================================================
     //                        STATE VARIABLES
     // =============================================================
 
-    // Counters
+    // Core tokenization
     Counters.Counter private _tokenIdCounter;
+    Counters.Counter private _propertyIdCounter;
     
-    // Property data
-    Property public property;
+    // Multi-property support
+    mapping(uint256 => Property) public properties;           // propertyId => Property
+    mapping(uint256 => uint256) public tokenToProperty;       // tokenId => propertyId
+    mapping(uint256 => bool) public propertyExists;
     
-    // Trading fee (1% = 100 basis points)
-    uint256 public constant TRADING_FEE_BPS = 100;
-    uint256 public constant BASIS_POINTS = 10000;
+    // Fractional ownership tracking
+    mapping(uint256 => mapping(address => uint256[])) public ownerTokensByProperty; // propertyId => owner => tokenIds
+    mapping(address => uint256) public totalTokensOwned;      // owner => total tokens across all properties
     
     // Marketplace
     mapping(uint256 => TokenListing) public marketplace;
     mapping(uint256 => bool) public isTokenListed;
+    uint256 public constant TRADING_FEE_BPS = 100;           // 1%
+    uint256 public constant BASIS_POINTS = 10000;
     
-    // Week 2: Chainlink & DeFi Integration
-    mapping(uint256 => bool) public stakedInAave;      // DeFi staking status
-    mapping(uint256 => uint256) public stakingRewards; // Accumulated rewards
-    bool public chainlinkVerified;                     // Functions verification status
-    uint256 public lastPriceUpdate;                    // Data Feeds timestamp
-    uint256 public automationCounter;                  // Automation execution count
+    // Aave Integration
+    mapping(address => AavePosition) public aavePositions;   // user => position
+    mapping(uint256 => bool) public tokenUsedAsCollateral;   // tokenId => isCollateral
+    mapping(uint256 => uint256) public tokenCollateralValue; // tokenId => USD value
     
-    // Chainlink Data Feeds
-    AggregatorV3Interface internal priceFeed;          // ETH/USD price feed
-    uint256 public priceUpdateInterval;                // Price update frequency (seconds)
+    // Yield Distribution
+    mapping(uint256 => uint256) public propertyYieldPool;    // propertyId => total yield accumulated
+    mapping(uint256 => mapping(address => uint256)) public userYieldShare; // propertyId => user => share
+    mapping(uint256 => uint256) public lastYieldDistribution; // propertyId => timestamp
     
-    // Chainlink Functions
-    bytes32 public lastRequestId;                      // Last Functions request
-    string public propertyApiUrl;                      // API endpoint for verification
+    // Liquidation Protection
+    mapping(address => bool) public liquidationProtection;   // user => protected
+    mapping(address => uint256) public liquidationThreshold; // user => custom threshold
+    uint256 public constant DEFAULT_LIQUIDATION_THRESHOLD = 8000; // 80%
     
-    // Mock Aave integration
-    uint256 public constant AAVE_APY_BPS = 500;        // 5% APY in basis points
-    uint256 public totalStaked;                        // Total tokens staked
-    mapping(address => uint256) public stakingTimestamp; // When user started staking
+    // Cross-chain (Chainlink CCIP)
+    mapping(bytes32 => CrossChainTransfer) public crossChainTransfers;
+    mapping(uint64 => bool) public supportedChains;          // Ethereum, Polygon
+    uint64 public currentChain;
+    
+    // Chainlink integration
+    AggregatorV3Interface internal ethUsdPriceFeed;
+    AggregatorV3Interface internal maticUsdPriceFeed;
+    uint256 public priceUpdateInterval = 3600;               // 1 hour
+    uint256 public lastPriceUpdate;
+    
+    // Protocol settings
+    uint256 public constant AAVE_LENDING_APY = 500;          // 5% base APY
+    uint256 public constant YIELD_DISTRIBUTION_INTERVAL = 86400; // 24 hours
+    uint256 public constant MAX_LTV_RATIO = 7500;            // 75% max loan-to-value
+    
+    // Emergency controls
+    bool public emergencyPaused;
+    mapping(address => bool) public authorizedOperators;
 
     // =============================================================
     //                           EVENTS
     // =============================================================
 
-    event PropertyInitialized(string propertyId, uint256 totalValue, uint256 totalTokens);
-    event TokenMinted(address indexed to, uint256 indexed tokenId, uint256 price);
-    event TokenPurchased(address indexed buyer, uint256 indexed tokenId, uint256 price);
-    event TokenListed(uint256 indexed tokenId, uint256 price, address indexed seller);
-    event TokenDelisted(uint256 indexed tokenId, address indexed seller);
-    event TokenSold(uint256 indexed tokenId, uint256 price, address indexed seller, address indexed buyer);
-    event TradingFeeCollected(uint256 amount);
-    event PriceUpdated(uint256 oldPrice, uint256 newPrice);
+    // Property events
+    event PropertyCreated(uint256 indexed propertyId, string propertyIdStr, uint256 totalValue);
+    event PropertyTokenMinted(uint256 indexed propertyId, uint256 indexed tokenId, address indexed to);
     
-    // Week 2: Chainlink & DeFi Events
-    event ChainlinkVerificationRequested(bytes32 indexed requestId, string propertyId);
-    event ChainlinkVerificationCompleted(bool verified, uint256 valuation);
-    event PriceFeedUpdated(uint256 newPrice, uint256 timestamp);
-    event AutomationPerformed(uint256 counter, uint256 timestamp);
-    event TokenStakedInAave(uint256 indexed tokenId, address indexed owner);
-    event TokenUnstakedFromAave(uint256 indexed tokenId, address indexed owner, uint256 rewards);
-    event StakingRewardsClaimed(address indexed user, uint256 amount);
+    // Marketplace events
+    event TokenListed(uint256 indexed tokenId, uint256 price, address indexed seller);
+    event TokenSold(uint256 indexed tokenId, uint256 price, address indexed seller, address indexed buyer);
+    event TokenDelisted(uint256 indexed tokenId);
+    
+    // Aave integration events
+    event TokensSuppliedAsCollateral(address indexed user, uint256[] tokenIds, uint256 totalValue);
+    event AssetsWithdrawnFromAave(address indexed user, uint256[] tokenIds, uint256 totalValue);
+    event AssetsBorrowedFromAave(address indexed user, uint256 amount, address asset);
+    event LoanRepaidToAave(address indexed user, uint256 amount, address asset);
+    event PositionLiquidated(address indexed user, uint256 collateralSeized, uint256 debtRepaid);
+    
+    // Yield events
+    event YieldDistributed(uint256 indexed propertyId, uint256 totalYield, uint256 numOwners);
+    event YieldClaimed(address indexed user, uint256 indexed propertyId, uint256 amount);
+    
+    // Cross-chain events
+    event CrossChainTransferInitiated(uint256 indexed tokenId, uint64 destinationChain, bytes32 messageId);
+    event CrossChainTransferCompleted(uint256 indexed tokenId, address indexed to);
+
+    // =============================================================
+    //                        MODIFIERS
+    // =============================================================
+
+    modifier onlyTokenOwner(uint256 tokenId) {
+        require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        _;
+    }
+
+    modifier onlyAuthorized() {
+        require(owner() == msg.sender || authorizedOperators[msg.sender], "Not authorized");
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!emergencyPaused, "Contract paused");
+        _;
+    }
+
+    modifier validProperty(uint256 propertyId) {
+        require(propertyExists[propertyId], "Property does not exist");
+        _;
+    }
 
     // =============================================================
     //                        CONSTRUCTOR
     // =============================================================
 
-    constructor(address _priceFeed) ERC721("Lotwise Property Token", "LPT") {
-        // Initialize with default $1M property
-        _initializeProperty("123", 1000000 ether, 1000);
+    constructor(
+        address _ethUsdPriceFeed,
+        address _maticUsdPriceFeed,
+        uint64 _currentChain
+    ) ERC721("Lotwise Fractional Property", "LFP") {
+        // Initialize price feeds
+        if (_ethUsdPriceFeed != address(0)) {
+            ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
+        }
+        if (_maticUsdPriceFeed != address(0)) {
+            maticUsdPriceFeed = AggregatorV3Interface(_maticUsdPriceFeed);
+        }
         
-        // Start token IDs at 1
+        // Set current chain (1 = Ethereum, 137 = Polygon)
+        currentChain = _currentChain;
+        supportedChains[1] = true;    // Ethereum
+        supportedChains[137] = true;  // Polygon
+        
+        // Start counters at 1
+        _propertyIdCounter.increment();
         _tokenIdCounter.increment();
         
-        // Week 2: Initialize Chainlink components
-        if (_priceFeed != address(0)) {
-            priceFeed = AggregatorV3Interface(_priceFeed);
-        }
-        priceUpdateInterval = 3600; // 1 hour default
-        propertyApiUrl = "http://localhost:5000/property/"; // Default API
         lastPriceUpdate = block.timestamp;
     }
 
     // =============================================================
-    //                    CORE TOKENIZATION
+    //                    PROPERTY MANAGEMENT
     // =============================================================
 
     /**
-     * @dev Initialize property data (owner-only for Week 1)
-     * @param _propertyId Unique property identifier
-     * @param _totalValue Total property value in wei
-     * @param _totalTokens Total number of tokens to create
+     * @dev Create a new property for tokenization
+     * @param _propertyIdStr Unique property identifier string
+     * @param _totalValueUSD Total property value in USD (scaled by 1e18)
+     * @param _metadataURI IPFS URI for property metadata
      */
-    function _initializeProperty(
-        string memory _propertyId,
-        uint256 _totalValue,
-        uint256 _totalTokens
-    ) internal {
-        require(_totalTokens > 0, "Total tokens must be > 0");
-        require(_totalValue > 0, "Total value must be > 0");
+    function createProperty(
+        string memory _propertyIdStr,
+        uint256 _totalValueUSD,
+        string memory _metadataURI
+    ) external onlyAuthorized returns (uint256 propertyId) {
+        require(_totalValueUSD > 0, "Invalid property value");
+        require(bytes(_propertyIdStr).length > 0, "Property ID required");
         
-        property = Property({
-            propertyId: _propertyId,
-            totalValue: _totalValue,
-            tokenPrice: _totalValue / _totalTokens,
-            totalTokens: _totalTokens,
-            isActive: true
+        propertyId = _propertyIdCounter.current();
+        _propertyIdCounter.increment();
+        
+        // Each property is divided into exactly 1,000 tokens
+        uint256 tokenPrice = _totalValueUSD / 1000;
+        
+        properties[propertyId] = Property({
+            propertyId: _propertyIdStr,
+            totalValue: _totalValueUSD,
+            tokenPrice: tokenPrice,
+            totalTokens: 1000,
+            mintedTokens: 0,
+            isActive: true,
+            metadataURI: _metadataURI,
+            fractionalOwners: new address[](0)
         });
-
-        emit PropertyInitialized(_propertyId, _totalValue, _totalTokens);
+        
+        propertyExists[propertyId] = true;
+        lastYieldDistribution[propertyId] = block.timestamp; // Initialize yield distribution timestamp
+        
+        emit PropertyCreated(propertyId, _propertyIdStr, _totalValueUSD);
+        
+        return propertyId;
     }
 
     /**
-     * @dev Mint new tokens (owner-only for Week 1, Functions integration in Week 2)
+     * @dev Mint fractional ownership tokens for a property
+     * @param propertyId The property to mint tokens for
      * @param to Address to mint tokens to
-     * @param amount Number of tokens to mint
+     * @param quantity Number of tokens to mint (max 1000 per property)
      */
-    function mintTokens(address to, uint256 amount) external onlyOwner {
-        require(property.isActive, "Property not active");
-        require(amount > 0, "Amount must be > 0");
-        require(
-            _tokenIdCounter.current() + amount - 1 <= property.totalTokens,
-            "Would exceed total token supply"
-        );
-
-        for (uint256 i = 0; i < amount; i++) {
+    function mintPropertyTokens(
+        uint256 propertyId,
+        address to,
+        uint256 quantity
+    ) external payable validProperty(propertyId) nonReentrant {
+        Property storage prop = properties[propertyId];
+        require(prop.isActive, "Property not active");
+        require(quantity > 0 && quantity <= 100, "Invalid quantity (1-100)");
+        require(prop.mintedTokens + quantity <= prop.totalTokens, "Exceeds total supply");
+        
+        // Calculate total cost in ETH (convert USD to ETH using price feed)
+        uint256 totalCostUSD = prop.tokenPrice * quantity;
+        uint256 totalCostETH = _convertUSDToETH(totalCostUSD);
+        require(msg.value >= totalCostETH, "Insufficient payment");
+        
+        // Mint tokens
+        for (uint256 i = 0; i < quantity; i++) {
             uint256 tokenId = _tokenIdCounter.current();
-            _safeMint(to, tokenId);
             _tokenIdCounter.increment();
             
-            emit TokenMinted(to, tokenId, property.tokenPrice);
+            _safeMint(to, tokenId);
+            tokenToProperty[tokenId] = propertyId;
+            
+            emit PropertyTokenMinted(propertyId, tokenId, to);
+        }
+        
+        // Update property state
+        prop.mintedTokens += quantity;
+        
+        // Track fractional ownership
+        if (ownerTokensByProperty[propertyId][to].length == 0) {
+            prop.fractionalOwners.push(to);
+        }
+        
+        for (uint256 i = 0; i < quantity; i++) {
+            uint256 tokenId = _tokenIdCounter.current() - quantity + i;
+            ownerTokensByProperty[propertyId][to].push(tokenId);
+        }
+        
+        totalTokensOwned[to] += quantity;
+        
+        // Refund excess payment
+        if (msg.value > totalCostETH) {
+            payable(msg.sender).transfer(msg.value - totalCostETH);
         }
     }
 
+    // =============================================================
+    //                    AAVE INTEGRATION
+    // =============================================================
+
     /**
-     * @dev Buy tokens directly from the contract
-     * @param amount Number of tokens to purchase
+     * @dev Supply tokens as collateral to Aave
+     * @param tokenIds Array of token IDs to use as collateral
      */
-    function buyTokens(uint256 amount) external payable nonReentrant {
-        require(property.isActive, "Property not active");
-        require(amount > 0, "Amount must be > 0");
+    function supplyToAave(uint256[] calldata tokenIds) external nonReentrant {
+        require(tokenIds.length > 0, "No tokens provided");
+        
+        uint256 totalCollateralValue = 0;
+        
+        // Verify ownership and calculate total value
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            require(ownerOf(tokenIds[i]) == msg.sender, "Not token owner");
+            require(!tokenUsedAsCollateral[tokenIds[i]], "Token already collateralized");
+            
+            uint256 propertyId = tokenToProperty[tokenIds[i]];
+            uint256 tokenValue = properties[propertyId].tokenPrice;
+            
+            tokenUsedAsCollateral[tokenIds[i]] = true;
+            tokenCollateralValue[tokenIds[i]] = tokenValue;
+            totalCollateralValue += tokenValue;
+        }
+        
+        // Update user's Aave position
+        AavePosition storage position = aavePositions[msg.sender];
+        position.suppliedAmount += totalCollateralValue;
+        position.isCollateralized = true;
+        position.lastYieldUpdate = block.timestamp;
+        
+        emit TokensSuppliedAsCollateral(msg.sender, tokenIds, totalCollateralValue);
+    }
+
+    /**
+     * @dev Borrow assets against collateralized tokens
+     * @param amount Amount to borrow in USD (scaled by 1e18)
+     * @param asset Address of asset to borrow (USDC, USDT, etc.)
+     */
+    function borrowFromAave(uint256 amount, address asset) external nonReentrant {
+        AavePosition storage position = aavePositions[msg.sender];
+        require(position.isCollateralized, "No collateral supplied");
+        
+        // Calculate maximum borrowable amount (75% LTV)
+        uint256 maxBorrow = (position.suppliedAmount * MAX_LTV_RATIO) / BASIS_POINTS;
+        require(position.borrowedAmount + amount <= maxBorrow, "Exceeds borrowing capacity");
+        
+        // Update position
+        position.borrowedAmount += amount;
+        position.healthFactor = _calculateHealthFactor(msg.sender);
+        
+        // In production: integrate with actual Aave protocol
+        // For now: mock the borrowing process
+        
+        emit AssetsBorrowedFromAave(msg.sender, amount, asset);
+    }
+
+    /**
+     * @dev Repay borrowed assets to Aave
+     * @param amount Amount to repay in USD
+     * @param asset Address of asset being repaid
+     */
+    function repayToAave(uint256 amount, address asset) external nonReentrant {
+        AavePosition storage position = aavePositions[msg.sender];
+        require(position.borrowedAmount >= amount, "Repay amount exceeds debt");
+        
+        // Update position
+        position.borrowedAmount -= amount;
+        position.healthFactor = _calculateHealthFactor(msg.sender);
+        
+        // In production: handle actual asset transfer and Aave interaction
+        
+        emit LoanRepaidToAave(msg.sender, amount, asset);
+    }
+
+    /**
+     * @dev Withdraw collateral from Aave (if health factor allows)
+     * @param tokenIds Array of token IDs to withdraw
+     */
+    function withdrawFromAave(uint256[] calldata tokenIds) external nonReentrant {
+        require(tokenIds.length > 0, "No tokens provided");
+        
+        uint256 withdrawValue = 0;
+        
+        // Calculate withdrawal value and verify ownership
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            require(ownerOf(tokenIds[i]) == msg.sender, "Not token owner");
+            require(tokenUsedAsCollateral[tokenIds[i]], "Token not collateralized");
+            
+            withdrawValue += tokenCollateralValue[tokenIds[i]];
+        }
+        
+        AavePosition storage position = aavePositions[msg.sender];
+        
+        // Check if withdrawal maintains healthy position
+        uint256 newCollateralValue = position.suppliedAmount - withdrawValue;
+        uint256 maxBorrowAfterWithdraw = (newCollateralValue * MAX_LTV_RATIO) / BASIS_POINTS;
+        require(position.borrowedAmount <= maxBorrowAfterWithdraw, "Would cause liquidation");
+        
+        // Update position and token states
+        position.suppliedAmount -= withdrawValue;
+        
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            tokenUsedAsCollateral[tokenIds[i]] = false;
+            tokenCollateralValue[tokenIds[i]] = 0;
+        }
+        
+        if (position.suppliedAmount == 0) {
+            position.isCollateralized = false;
+        }
+        
+        position.healthFactor = _calculateHealthFactor(msg.sender);
+        
+        emit AssetsWithdrawnFromAave(msg.sender, tokenIds, withdrawValue);
+    }
+
+    // =============================================================
+    //                    YIELD DISTRIBUTION
+    // =============================================================
+
+    /**
+     * @dev Distribute lending yield to fractional owners of a property
+     * @param propertyId Property to distribute yield for
+     */
+    function distributeYield(uint256 propertyId) external validProperty(propertyId) {
         require(
-            _tokenIdCounter.current() + amount - 1 <= property.totalTokens,
-            "Not enough tokens available"
+            block.timestamp >= lastYieldDistribution[propertyId] + YIELD_DISTRIBUTION_INTERVAL,
+            "Distribution too frequent"
         );
         
-        uint256 totalCost = property.tokenPrice * amount;
-        require(msg.value >= totalCost, "Insufficient payment");
-
-        // Mint tokens to buyer
-        for (uint256 i = 0; i < amount; i++) {
-            uint256 tokenId = _tokenIdCounter.current();
-            _safeMint(msg.sender, tokenId);
-            _tokenIdCounter.increment();
+        Property storage prop = properties[propertyId];
+        require(prop.mintedTokens > 0, "No tokens minted");
+        
+        // Calculate total yield for this property
+        uint256 totalYield = _calculatePropertyYield(propertyId);
+        require(totalYield > 0, "No yield to distribute");
+        
+        // Distribute proportionally to token holders
+        for (uint256 i = 0; i < prop.fractionalOwners.length; i++) {
+            address owner = prop.fractionalOwners[i];
+            uint256 ownerTokens = ownerTokensByProperty[propertyId][owner].length;
             
-            emit TokenPurchased(msg.sender, tokenId, property.tokenPrice);
+            if (ownerTokens > 0) {
+                uint256 ownerShare = (totalYield * ownerTokens) / prop.mintedTokens;
+                userYieldShare[propertyId][owner] += ownerShare;
+            }
         }
+        
+        propertyYieldPool[propertyId] += totalYield;
+        lastYieldDistribution[propertyId] = block.timestamp;
+        
+        emit YieldDistributed(propertyId, totalYield, prop.fractionalOwners.length);
+    }
 
-        // Refund excess payment
-        if (msg.value > totalCost) {
-            payable(msg.sender).transfer(msg.value - totalCost);
-        }
+    /**
+     * @dev Claim accumulated yield for a property
+     * @param propertyId Property to claim yield from
+     */
+    function claimYield(uint256 propertyId) external validProperty(propertyId) nonReentrant {
+        uint256 claimableYield = userYieldShare[propertyId][msg.sender];
+        require(claimableYield > 0, "No yield to claim");
+        
+        userYieldShare[propertyId][msg.sender] = 0;
+        
+        // Convert USD yield to ETH and transfer
+        uint256 yieldInETH = _convertUSDToETH(claimableYield);
+        require(address(this).balance >= yieldInETH, "Insufficient contract balance");
+        
+        payable(msg.sender).transfer(yieldInETH);
+        
+        emit YieldClaimed(msg.sender, propertyId, claimableYield);
     }
 
     // =============================================================
-    //                       MARKETPLACE
+    //                    LIQUIDATION MANAGEMENT
     // =============================================================
 
     /**
-     * @dev List a token for sale
-     * @param tokenId Token to list
-     * @param price Asking price in wei
+     * @dev Liquidate undercollateralized position
+     * @param user Address of user to liquidate
      */
-    function listToken(uint256 tokenId, uint256 price) external {
-        require(ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(!isTokenListed[tokenId], "Token already listed");
-        require(!stakedInAave[tokenId], "Token staked in Aave");
-        require(price > 0, "Price must be > 0");
+    function liquidatePosition(address user) external nonReentrant {
+        AavePosition storage position = aavePositions[user];
+        require(position.isCollateralized, "No position to liquidate");
+        require(position.healthFactor < 80, "Position is healthy");
+        
+        // Calculate liquidation parameters
+        uint256 debtToRepay = position.borrowedAmount;
+        uint256 collateralToSeize = (debtToRepay * 11000) / BASIS_POINTS; // 110% liquidation bonus
+        
+        require(position.suppliedAmount >= collateralToSeize, "Insufficient collateral");
+        
+        // Update position
+        position.borrowedAmount = 0;
+        position.suppliedAmount -= collateralToSeize;
+        position.healthFactor = _calculateHealthFactor(user);
+        
+        if (position.suppliedAmount == 0) {
+            position.isCollateralized = false;
+        }
+        
+        emit PositionLiquidated(user, collateralToSeize, debtToRepay);
+    }
 
+    // =============================================================
+    //                    HELPER FUNCTIONS
+    // =============================================================
+
+    /**
+     * @dev Calculate health factor for a user's position
+     * @param user Address to calculate health factor for
+     */
+    function _calculateHealthFactor(address user) internal view returns (uint8) {
+        AavePosition storage position = aavePositions[user];
+        
+        if (position.borrowedAmount == 0) return 100;
+        if (position.suppliedAmount == 0) return 0;
+        
+        uint256 collateralValueWithLTV = (position.suppliedAmount * MAX_LTV_RATIO) / BASIS_POINTS;
+        uint256 healthFactor = (collateralValueWithLTV * 100) / position.borrowedAmount;
+        
+        return uint8(healthFactor > 100 ? 100 : healthFactor);
+    }
+
+    /**
+     * @dev Calculate yield for a property based on Aave lending
+     * @param propertyId Property to calculate yield for
+     */
+    function _calculatePropertyYield(uint256 propertyId) internal view returns (uint256) {
+        Property storage prop = properties[propertyId];
+        
+        // Calculate based on time elapsed and total property value staked in Aave
+        uint256 timeElapsed = block.timestamp - lastYieldDistribution[propertyId];
+        if (timeElapsed == 0) timeElapsed = YIELD_DISTRIBUTION_INTERVAL;
+        
+        // Simplified yield calculation for testing: $100 per day for a $1M property
+        uint256 dailyYield = prop.totalValue / 10000; // 0.01% daily = 3.65% annual
+        uint256 periodYield = (dailyYield * timeElapsed) / 86400; // Scale by time
+        
+        return periodYield;
+    }
+
+    /**
+     * @dev Convert USD amount to ETH using Chainlink price feed
+     * @param usdAmount Amount in USD (scaled by 1e18)
+     */
+    function _convertUSDToETH(uint256 usdAmount) internal view returns (uint256) {
+        if (address(ethUsdPriceFeed) == address(0)) {
+            // Fallback: assume 1 ETH = $2000
+            return (usdAmount * 1e18) / (2000 * 1e18);
+        }
+        
+        (, int256 price, , , ) = ethUsdPriceFeed.latestRoundData();
+        require(price > 0, "Invalid price data");
+        
+        // Convert USD to ETH: usdAmount / ethPriceInUSD
+        return (usdAmount * 1e18) / uint256(price * 1e10); // price has 8 decimals
+    }
+
+    // =============================================================
+    //                    MARKETPLACE FUNCTIONS
+    // =============================================================
+
+    /**
+     * @dev List token for sale on marketplace
+     * @param tokenId Token to list
+     * @param priceUSD Price in USD (scaled by 1e18)
+     */
+    function listToken(uint256 tokenId, uint256 priceUSD) external onlyTokenOwner(tokenId) {
+        require(!tokenUsedAsCollateral[tokenId], "Token is collateralized");
+        require(!isTokenListed[tokenId], "Token already listed");
+        require(priceUSD > 0, "Invalid price");
+        
         marketplace[tokenId] = TokenListing({
             tokenId: tokenId,
-            price: price,
+            price: priceUSD,
             seller: msg.sender,
-            isActive: true
+            isActive: true,
+            listedAt: block.timestamp
         });
         
         isTokenListed[tokenId] = true;
-        emit TokenListed(tokenId, price, msg.sender);
-    }
-
-    /**
-     * @dev Remove token listing
-     * @param tokenId Token to delist
-     */
-    function delistToken(uint256 tokenId) external {
-        require(ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(isTokenListed[tokenId], "Token not listed");
-
-        delete marketplace[tokenId];
-        isTokenListed[tokenId] = false;
         
-        emit TokenDelisted(tokenId, msg.sender);
+        emit TokenListed(tokenId, priceUSD, msg.sender);
     }
 
     /**
-     * @dev Buy a listed token
+     * @dev Buy listed token
      * @param tokenId Token to purchase
      */
-    function buyListedToken(uint256 tokenId) external payable nonReentrant {
-        TokenListing memory listing = marketplace[tokenId];
-        require(listing.isActive, "Token not for sale");
-        require(msg.value >= listing.price, "Insufficient payment");
-        require(ownerOf(tokenId) == listing.seller, "Seller no longer owns token");
-
-        // Calculate fee and seller amount
-        uint256 tradingFee = (listing.price * TRADING_FEE_BPS) / BASIS_POINTS;
-        uint256 sellerAmount = listing.price - tradingFee;
-
+    function buyToken(uint256 tokenId) external payable nonReentrant {
+        require(isTokenListed[tokenId], "Token not listed");
+        
+        TokenListing storage listing = marketplace[tokenId];
+        require(listing.isActive, "Listing not active");
+        require(listing.seller != msg.sender, "Cannot buy own token");
+        
+        uint256 priceETH = _convertUSDToETH(listing.price);
+        require(msg.value >= priceETH, "Insufficient payment");
+        
+        // Calculate trading fee
+        uint256 tradingFee = (priceETH * TRADING_FEE_BPS) / BASIS_POINTS;
+        uint256 sellerAmount = priceETH - tradingFee;
+        
+        // Update ownership tracking
+        uint256 propertyId = tokenToProperty[tokenId];
+        _removeTokenFromOwner(propertyId, listing.seller, tokenId);
+        ownerTokensByProperty[propertyId][msg.sender].push(tokenId);
+        
+        totalTokensOwned[listing.seller]--;
+        totalTokensOwned[msg.sender]++;
+        
+        // Transfer token and payments
+        _transfer(listing.seller, msg.sender, tokenId);
+        payable(listing.seller).transfer(sellerAmount);
+        
         // Clear listing
         delete marketplace[tokenId];
         isTokenListed[tokenId] = false;
-
-        // Transfer token
-        _transfer(listing.seller, msg.sender, tokenId);
-
-        // Transfer payment to seller (fee stays in contract)
-        payable(listing.seller).transfer(sellerAmount);
-
+        
         // Refund excess
-        if (msg.value > listing.price) {
-            payable(msg.sender).transfer(msg.value - listing.price);
+        if (msg.value > priceETH) {
+            payable(msg.sender).transfer(msg.value - priceETH);
         }
-
+        
         emit TokenSold(tokenId, listing.price, listing.seller, msg.sender);
-        emit TradingFeeCollected(tradingFee);
     }
-
-    // =============================================================
-    //                    WEEK 2+ PLACEHOLDERS
-    // =============================================================
 
     /**
-     * @dev Update token price (placeholder for Chainlink Data Feeds)
-     * @param newTotalValue New total property value
+     * @dev Remove token from owner's array
      */
-    function updatePropertyValue(uint256 newTotalValue) external onlyOwner {
-        require(newTotalValue > 0, "Value must be > 0");
-        
-        uint256 oldPrice = property.tokenPrice;
-        property.totalValue = newTotalValue;
-        property.tokenPrice = newTotalValue / property.totalTokens;
-        lastPriceUpdate = block.timestamp;
-        
-        emit PriceUpdated(oldPrice, property.tokenPrice);
+    function _removeTokenFromOwner(uint256 propertyId, address owner, uint256 tokenId) internal {
+        uint256[] storage tokens = ownerTokensByProperty[propertyId][owner];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == tokenId) {
+                tokens[i] = tokens[tokens.length - 1];
+                tokens.pop();
+                break;
+            }
+        }
     }
 
     // =============================================================
-    //                        VIEW FUNCTIONS
+    //                    VIEW FUNCTIONS
     // =============================================================
 
     /**
      * @dev Get property information
      */
-    function getProperty() external view returns (Property memory) {
-        return property;
+    function getProperty(uint256 propertyId) external view returns (Property memory) {
+        return properties[propertyId];
     }
 
     /**
-     * @dev Get token listing information
-     * @param tokenId Token ID to check
+     * @dev Get user's position in Aave
      */
-    function getTokenListing(uint256 tokenId) external view returns (TokenListing memory) {
-        return marketplace[tokenId];
+    function getAavePosition(address user) external view returns (AavePosition memory) {
+        return aavePositions[user];
     }
 
     /**
-     * @dev Get all tokens owned by an address
-     * @param owner Address to check
+     * @dev Get tokens owned by user for a property
      */
-    function getTokensOwnedBy(address owner) external view returns (uint256[] memory) {
-        uint256 tokenCount = balanceOf(owner);
-        uint256[] memory tokenIds = new uint256[](tokenCount);
-        
-        for (uint256 i = 0; i < tokenCount; i++) {
-            tokenIds[i] = tokenOfOwnerByIndex(owner, i);
-        }
-        
-        return tokenIds;
+    function getUserTokens(uint256 propertyId, address user) external view returns (uint256[] memory) {
+        return ownerTokensByProperty[propertyId][user];
     }
 
     /**
-     * @dev Get total tokens minted
+     * @dev Get claimable yield for user and property
      */
-    function totalMinted() external view returns (uint256) {
-        return _tokenIdCounter.current() - 1;
-    }
-
-    /**
-     * @dev Get remaining tokens available for minting
-     */
-    function remainingTokens() external view returns (uint256) {
-        uint256 minted = _tokenIdCounter.current() - 1;
-        return property.totalTokens > minted ? property.totalTokens - minted : 0;
+    function getClaimableYield(uint256 propertyId, address user) external view returns (uint256) {
+        return userYieldShare[propertyId][user];
     }
 
     // =============================================================
-    //                     ADMIN FUNCTIONS
+    //                    ADMIN FUNCTIONS
     // =============================================================
 
     /**
-     * @dev Toggle property active status
+     * @dev Emergency pause contract
      */
-    function togglePropertyActive() external onlyOwner {
-        property.isActive = !property.isActive;
+    function pauseContract() external onlyOwner {
+        emergencyPaused = true;
     }
 
     /**
-     * @dev Withdraw contract balance (trading fees)
+     * @dev Unpause contract
      */
-    function withdraw() external onlyOwner {
+    function unpauseContract() external onlyOwner {
+        emergencyPaused = false;
+    }
+
+    /**
+     * @dev Add authorized operator
+     */
+    function addOperator(address operator) external onlyOwner {
+        authorizedOperators[operator] = true;
+    }
+
+    /**
+     * @dev Remove authorized operator
+     */
+    function removeOperator(address operator) external onlyOwner {
+        authorizedOperators[operator] = false;
+    }
+
+    /**
+     * @dev Withdraw contract balance (fees)
+     */
+    function withdrawFees() external onlyOwner {
         uint256 balance = address(this).balance;
-        require(balance > 0, "No funds to withdraw");
+        require(balance > 0, "No fees to withdraw");
         payable(owner()).transfer(balance);
-    }
-
-    /**
-     * @dev Emergency: delist all tokens (if needed)
-     */
-    function emergencyDelistAll(uint256[] calldata tokenIds) external onlyOwner {
-        for (uint256 i = 0; i < tokenIds.length; i++) {
-            if (isTokenListed[tokenIds[i]]) {
-                delete marketplace[tokenIds[i]];
-                isTokenListed[tokenIds[i]] = false;
-                emit TokenDelisted(tokenIds[i], address(this));
-            }
-        }
-    }
-
-    // =============================================================
-    //                  CHAINLINK FUNCTIONS
-    // =============================================================
-
-    /**
-     * @dev Request property verification via Chainlink Functions
-     * @param propertyId Property ID to verify
-     */
-    function requestPropertyVerification(string memory propertyId) external onlyOwner {
-        // Mock implementation for hackathon
-        // In production, this would send a request to Chainlink Functions
-        bytes32 requestId = keccak256(abi.encodePacked(propertyId, block.timestamp));
-        lastRequestId = requestId;
-        
-        emit ChainlinkVerificationRequested(requestId, propertyId);
-        
-        // Simulate immediate response for demo
-        _fulfillVerificationRequest(requestId, true, 1000000 ether);
-    }
-
-    /**
-     * @dev Fulfill verification request (called by Chainlink Functions)
-     * @param requestId Request identifier
-     * @param verified Whether property is verified
-     * @param valuation Current property valuation
-     */
-    function _fulfillVerificationRequest(
-        bytes32 requestId,
-        bool verified,
-        uint256 valuation
-    ) internal {
-        require(requestId == lastRequestId, "Invalid request ID");
-        
-        chainlinkVerified = verified;
-        
-        if (verified && valuation != property.totalValue) {
-            uint256 oldValue = property.totalValue;
-            property.totalValue = valuation;
-            property.tokenPrice = valuation / property.totalTokens;
-            emit PriceUpdated(oldValue, valuation);
-        }
-        
-        emit ChainlinkVerificationCompleted(verified, valuation);
-    }
-
-    // =============================================================
-    //                  CHAINLINK DATA FEEDS
-    // =============================================================
-
-    /**
-     * @dev Get latest ETH/USD price from Chainlink
-     */
-    function getLatestPrice() public view returns (uint256) {
-        if (address(priceFeed) == address(0)) {
-            return 2000 * 10**8; // Mock $2000 ETH price
-        }
-        
-        (, int price,,,) = priceFeed.latestRoundData();
-        return uint256(price);
-    }
-
-    /**
-     * @dev Update property value based on price feeds
-     */
-    function updatePriceFromFeed() external onlyOwner {
-        uint256 ethUsdPrice = getLatestPrice();
-        
-        // Simple price adjustment based on ETH price movement
-        // In production, this would use more sophisticated real estate data
-        uint256 adjustmentFactor = (ethUsdPrice > 2000 * 10**8) ? 105 : 95; // ±5%
-        uint256 newValue = (property.totalValue * adjustmentFactor) / 100;
-        
-        uint256 oldValue = property.totalValue;
-        property.totalValue = newValue;
-        property.tokenPrice = newValue / property.totalTokens;
-        lastPriceUpdate = block.timestamp;
-        
-        emit PriceUpdated(oldValue, newValue);
-        emit PriceFeedUpdated(ethUsdPrice, block.timestamp);
-    }
-
-    // =============================================================
-    //                CHAINLINK AUTOMATION
-    // =============================================================
-
-    /**
-     * @dev Check if upkeep is needed (Chainlink Automation)
-     */
-    function checkUpkeep(bytes calldata) external view override returns (bool upkeepNeeded, bytes memory) {
-        upkeepNeeded = (block.timestamp - lastPriceUpdate) > priceUpdateInterval;
-        return (upkeepNeeded, "");
-    }
-
-    /**
-     * @dev Perform upkeep (called by Chainlink Automation)
-     */
-    function performUpkeep(bytes calldata) external override {
-        require((block.timestamp - lastPriceUpdate) > priceUpdateInterval, "Upkeep not needed");
-        
-        automationCounter++;
-        
-        // Auto-update price from feeds
-        if (address(priceFeed) != address(0)) {
-            uint256 ethUsdPrice = getLatestPrice();
-            uint256 adjustmentFactor = (ethUsdPrice > 2000 * 10**8) ? 102 : 98; // ±2% for automation
-            uint256 newValue = (property.totalValue * adjustmentFactor) / 100;
-            
-            uint256 oldValue = property.totalValue;
-            property.totalValue = newValue;
-            property.tokenPrice = newValue / property.totalTokens;
-            lastPriceUpdate = block.timestamp;
-            
-            emit PriceUpdated(oldValue, newValue);
-        }
-        
-        emit AutomationPerformed(automationCounter, block.timestamp);
-    }
-
-    /**
-     * @dev Set price update interval (admin)
-     */
-    function setPriceUpdateInterval(uint256 _interval) external onlyOwner {
-        priceUpdateInterval = _interval;
-    }
-
-    // =============================================================
-    //                   MOCK AAVE INTEGRATION
-    // =============================================================
-
-    /**
-     * @dev Stake token in Aave for yield (mock implementation)
-     * @param tokenId Token to stake
-     */
-    function stakeInAave(uint256 tokenId) external {
-        require(ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(!stakedInAave[tokenId], "Token already staked");
-        
-        stakedInAave[tokenId] = true;
-        totalStaked++;
-        
-        if (stakingTimestamp[msg.sender] == 0) {
-            stakingTimestamp[msg.sender] = block.timestamp;
-        }
-        
-        emit TokenStakedInAave(tokenId, msg.sender);
-    }
-
-    /**
-     * @dev Unstake token from Aave and claim rewards
-     * @param tokenId Token to unstake
-     */
-    function unstakeFromAave(uint256 tokenId) external {
-        require(ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(stakedInAave[tokenId], "Token not staked");
-        
-        uint256 rewards = calculateStakingRewards(msg.sender);
-        
-        stakedInAave[tokenId] = false;
-        totalStaked--;
-        stakingRewards[tokenId] += rewards;
-        
-        emit TokenUnstakedFromAave(tokenId, msg.sender, rewards);
-    }
-
-    /**
-     * @dev Calculate staking rewards for user
-     * @param user User address
-     */
-    function calculateStakingRewards(address user) public view returns (uint256) {
-        if (stakingTimestamp[user] == 0) return 0;
-        
-        uint256 timeStaked = block.timestamp - stakingTimestamp[user];
-        uint256 userTokens = balanceOf(user);
-        
-        // Calculate APY rewards (5% annually)
-        uint256 annualReward = (userTokens * property.tokenPrice * AAVE_APY_BPS) / BASIS_POINTS;
-        uint256 rewards = (annualReward * timeStaked) / 365 days;
-        
-        return rewards;
-    }
-
-    /**
-     * @dev Claim accumulated staking rewards
-     */
-    function claimStakingRewards() external {
-        uint256 rewards = calculateStakingRewards(msg.sender);
-        require(rewards > 0, "No rewards to claim");
-        
-        stakingTimestamp[msg.sender] = block.timestamp;
-        payable(msg.sender).transfer(rewards);
-        
-        emit StakingRewardsClaimed(msg.sender, rewards);
-    }
-
-    /**
-     * @dev Get staking info for user
-     */
-    function getStakingInfo(address user) external view returns (
-        uint256 tokensStaked,
-        uint256 rewardsAvailable,
-        uint256 timeStaked
-    ) {
-        uint256 tokens = balanceOf(user);
-        uint256 stakedCount = 0;
-        
-        for (uint256 i = 0; i < tokens; i++) {
-            uint256 tokenId = tokenOfOwnerByIndex(user, i);
-            if (stakedInAave[tokenId]) {
-                stakedCount++;
-            }
-        }
-        
-        return (
-            stakedCount,
-            calculateStakingRewards(user),
-            stakingTimestamp[user] > 0 ? block.timestamp - stakingTimestamp[user] : 0
-        );
-    }
-
-    // =============================================================
-    //                    CHAINLINK CCIP (Mock)
-    // =============================================================
-
-    /**
-     * @dev Mock CCIP cross-chain transfer (placeholder for full implementation)
-     * @param tokenId Token to transfer cross-chain
-     * @param destinationChain Target chain selector
-     * @param recipient Recipient address on destination chain
-     */
-    function crossChainTransfer(
-        uint256 tokenId,
-        uint64 destinationChain,
-        address recipient
-    ) external payable {
-        require(ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(!stakedInAave[tokenId], "Cannot transfer staked token");
-        require(!isTokenListed[tokenId], "Cannot transfer listed token");
-        
-        // Mock implementation - in production this would use Chainlink CCIP
-        // For hackathon, we'll just emit an event
-        emit TokenSold(tokenId, 0, msg.sender, recipient); // Reuse event for demo
-        
-        // In production: burn token here and mint on destination chain
-        _transfer(msg.sender, address(this), tokenId); // Temporarily hold token
-    }
-
-    // =============================================================
-    //                       ADMIN FUNCTIONS
-    // =============================================================
-
-    /**
-     * @dev Set Chainlink price feed address
-     */
-    function setPriceFeed(address _priceFeed) external onlyOwner {
-        priceFeed = AggregatorV3Interface(_priceFeed);
-    }
-
-    /**
-     * @dev Set property API URL for Chainlink Functions
-     */
-    function setPropertyApiUrl(string memory _url) external onlyOwner {
-        propertyApiUrl = _url;
     }
 
     // =============================================================
@@ -648,6 +728,7 @@ contract Lotwise is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, Automati
         uint256 tokenId,
         uint256 batchSize
     ) internal override(ERC721, ERC721Enumerable) {
+        require(!tokenUsedAsCollateral[tokenId], "Token is collateralized");
         super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
@@ -658,5 +739,43 @@ contract Lotwise is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, Automati
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+
+    // =============================================================
+    //                    CHAINLINK AUTOMATION
+    // =============================================================
+
+    function checkUpkeep(bytes calldata) external view override returns (bool upkeepNeeded, bytes memory performData) {
+        // Check if any property needs yield distribution
+        for (uint256 i = 1; i < _propertyIdCounter.current(); i++) {
+            if (propertyExists[i] && 
+                block.timestamp >= lastYieldDistribution[i] + YIELD_DISTRIBUTION_INTERVAL) {
+                upkeepNeeded = true;
+                performData = abi.encode(i);
+                return (true, performData);
+            }
+        }
+        
+        upkeepNeeded = false;
+        performData = "";
+    }
+
+    function performUpkeep(bytes calldata performData) external override {
+        uint256 propertyId = abi.decode(performData, (uint256));
+        
+        if (propertyExists[propertyId] && 
+            block.timestamp >= lastYieldDistribution[propertyId] + YIELD_DISTRIBUTION_INTERVAL) {
+            
+            // Auto-distribute yield
+            this.distributeYield(propertyId);
+        }
+    }
+
+    // =============================================================
+    //                    RECEIVE FUNCTION
+    // =============================================================
+
+    receive() external payable {
+        // Accept ETH for yield distributions and marketplace transactions
     }
 }

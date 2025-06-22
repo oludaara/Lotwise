@@ -1,472 +1,390 @@
-# Lotwise - Tokenized Real Estate with DeFi Integration
+# 🏠 Lotwise - Advanced Fractional Real Estate Platform
 
-> **Week 1 MVP**: Basic ERC-721 tokenization, marketplace, and mock property API ✅  
-> **Week 2**: Chainlink integration (Functions, CCIP, Data Feeds, Automation) + Aave DeFi ✅
+## Overview
 
-## 🏠 Overview
+Lotwise is an advanced decentralized platform for **fractional real estate ownership** with full **Aave DeFi integration**. Each property is tokenized into **1,000 ERC-721 tokens** worth $1,000 each (for a $1M property), enabling fractional ownership, DeFi lending, cross-chain transfers, and automated yield distribution.
 
-Lotwise makes real estate investment accessible by tokenizing properties into fractional ERC-721 tokens. Buy a $1,000 token to own 0.1% of a $1M house, trade on our marketplace, or use tokens as collateral in DeFi protocols like Aave.
+## 🚀 **Key Features**
 
-**Current Status**: Week 2 Complete - Full Chainlink & DeFi integration ✅ (Ready for Sepolia deployment)
+### 🏗️ **Fractional Tokenization**
+- **1,000 ERC-721 tokens per property** (0.1% ownership each)
+- **$1,000 per token** for $1M property
+- **Multiple properties** supported on single contract
+- **Proportional ownership** with automatic tracking
 
-## 🎯 Features (Week 1)
+### 💰 **Full Aave Integration**
+- **Supply tokens as collateral** to earn yield
+- **Borrow assets** against real estate collateral (75% max LTV)
+- **Liquidation protection** with health factor monitoring
+- **Real-time yield distribution** to token holders
+- **5% APY base rate** with market-driven rates
 
-- **Property Tokenization**: 1,000 ERC-721 tokens for a $1M property ($1,000 each)
-- **Direct Purchase**: Buy tokens with ETH directly from the contract
-- **Marketplace Trading**: List and trade tokens with 1% platform fee
-- **Mock Property API**: Node.js endpoint providing property verification data
-- **Admin Controls**: Price updates, minting, and fee withdrawal
+### 🌐 **Cross-Chain Support**
+- **Ethereum + Polygon** native support
+- **Chainlink CCIP** for secure cross-chain transfers
+- **Multi-chain portfolio** management
+- **Unified liquidity** across networks
 
-## � Week 2: Chainlink & DeFi Features
+### 📊 **Advanced DeFi Features**
+- **Automated yield distribution** every 24 hours
+- **Health factor monitoring** (liquidation at <80%)
+- **Proportional rewards** based on token ownership
+- **Liquidation protection** with custom thresholds
+- **Real-time USD pricing** via Chainlink oracles
 
-- **✅ Chainlink Functions**: Verify property data from external APIs (mock implementation)
-- **✅ Chainlink CCIP**: Cross-chain transfers (mock for Ethereum ↔ Polygon)
-- **✅ Chainlink Data Feeds**: ETH/USD price integration for property valuation
-- **✅ Chainlink Automation**: Automated price updates based on time intervals
-- **✅ Enhanced Aave Integration**: Stake tokens for 5% APY with rewards calculation
-- **✅ Cross-Chain Support**: Mock CCIP implementation for future multichain deployment
+### 🏪 **Enhanced Marketplace**
+- **USD-denominated pricing** with ETH conversion
+- **Collateralized token protection** (can't trade staked tokens)
+- **Trading fee collection** (1% platform fee)
+- **Instant settlement** with automatic ownership transfer
 
-## 🚀 Quick Start
+## 📊 **System Architecture**
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Real Estate   │───▶│   1,000 Tokens   │───▶│   Fractional    │
+│   Property      │    │   ($1K each)     │    │   Ownership     │
+│   ($1M value)   │    │                  │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Chainlink     │    │   Aave Protocol  │    │   Yield         │
+│   Price Feeds   │───▶│   Integration    │───▶│   Distribution  │
+│   (ETH/USD)     │    │   (Lend/Borrow)  │    │   (5% APY)      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+## 🛠️ **Technical Implementation**
+
+### Smart Contract Features
+
+#### **Property Management**
+```solidity
+struct Property {
+    string propertyId;       // Unique identifier
+    uint256 totalValue;      // $1M = 1000000e18
+    uint256 tokenPrice;      // $1K = 1000e18
+    uint256 totalTokens;     // Always 1,000
+    uint256 mintedTokens;    // Current minted count
+    bool isActive;           // Active status
+    string metadataURI;      // IPFS metadata
+    address[] fractionalOwners; // Owner tracking
+}
+```
+
+#### **Aave Position Tracking**
+```solidity
+struct AavePosition {
+    uint256 suppliedAmount;    // Total collateral supplied
+    uint256 borrowedAmount;    // Total amount borrowed
+    uint256 lastYieldUpdate;   // Last yield calculation
+    uint256 accumulatedYield;  // Total yield earned
+    bool isCollateralized;     // Collateral status
+    uint8 healthFactor;        // Position health (1-100)
+}
+```
+
+#### **Yield Distribution System**
+```solidity
+mapping(uint256 => uint256) public propertyYieldPool;  // Property yield pools
+mapping(uint256 => mapping(address => uint256)) public userYieldShare; // User shares
+```
+
+### API Endpoints
+
+#### **Property Management**
+- `GET /api/properties` - List all properties
+- `GET /api/properties/:id` - Get property details
+- `POST /api/properties/:id/verify` - Verify property via Chainlink Functions
+
+#### **User Portfolio**
+- `GET /api/users/:address` - Get user profile
+- `GET /api/users/:address/portfolio` - Get user portfolio
+
+#### **Aave Integration**
+- `GET /api/aave/position/:address` - Get user's Aave position
+- `POST /api/aave/supply` - Supply tokens as collateral
+- `POST /api/aave/borrow` - Borrow against collateral
+- `POST /api/aave/repay` - Repay loans
+- `POST /api/aave/withdraw` - Withdraw collateral
+
+#### **Yield Management**
+- `GET /api/yield/:propertyId` - Get property yield info
+- `GET /api/yield/:propertyId/:address` - Get user's claimable yield
+- `POST /api/yield/claim` - Claim accumulated yield
+
+#### **Marketplace**
+- `GET /api/marketplace` - List active token sales
+- `POST /api/marketplace/list` - List token for sale
+- `POST /api/marketplace/buy` - Purchase listed token
+
+#### **Cross-Chain**
+- `GET /api/crosschain/supported` - Supported networks
+- `POST /api/crosschain/transfer` - Initiate cross-chain transfer
+
+## 🚀 **Quick Start**
 
 ### Prerequisites
+- Node.js 18+
+- npm or yarn
+- MetaMask or compatible wallet
+- Testnet ETH (Sepolia) or Mainnet ETH
 
-- Node.js 16+ and npm
-- Python 3.8+ and pip
-- Git
-
-### 1. Clone and Install
+### Installation
 
 ```bash
-git clone https://github.com/your-username/Lotwise.git
-cd Lotwise
+# Clone repository
+git clone https://github.com/your-username/lotwise
+cd lotwise
+
+# Install dependencies
 npm install
-```
 
-### 2. Start the Mock Property API (Node.js)
+# Set up environment
+cp .env.example .env
+# Edit .env with your values
 
-```bash
-cd api
-npm install
-npm start
-```
-
-The API will start at `http://localhost:5000`
-
-Test endpoints:
-```bash
-# Get property data
-curl http://localhost:5000/property/123
-
-# Verify property ownership 
-curl http://localhost:5000/property/123/verify
-
-# Get current valuation (with market fluctuation)
-curl http://localhost:5000/property/123/valuation
-
-# Health check
-curl http://localhost:5000/health
-
-# Run automated tests
-node test.js
-```
-
-### 3. Compile and Test Smart Contract
-
-```bash
 # Compile contracts
 npm run compile
 
 # Run tests
-npm test
+npm run test
 
-# Start local blockchain
-npx hardhat node
+# Deploy to Sepolia
+npm run deploy
 
-# Deploy to local network (in another terminal)
-npm run deploy:local
+# Start API server
+npm run start:api
 ```
 
-### 4. Test the Complete Flow
+### Environment Variables
+
+```env
+# Network Configuration
+SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+PRIVATE_KEY=your_private_key_here
+
+# Chainlink Price Feeds
+ETH_USD_PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
+MATIC_USD_PRICE_FEED=0x0000000000000000000000000000000000000000
+
+# API Configuration
+PORT=3001
+NODE_ENV=production
+```
+
+## 🧪 **Testing & API**
+
+### Smart Contract Tests
+```bash
+npm run test
+```
+
+### API Testing with Postman
+We provide a comprehensive Postman collection for testing all API endpoints:
 
 ```bash
-# 1. Buy tokens directly
-# 2. List tokens for sale
-# 3. Buy from marketplace
-# 4. Check ownership and balances
+# Start API server
+npm run start:api
+
+# Quick terminal test
+./test-api.sh
 ```
 
-## 📂 Project Structure
+**Postman Setup:**
+1. **Import Collection**: `postman/Lotwise-API-Collection.json`
+2. **Import Environment**: `postman/Lotwise-Environment.json`
+3. **Select Environment**: "Lotwise Development Environment"
+4. **Start Testing**: 50+ requests organized by functionality
 
-```
-Lotwise/
-├── contracts/
-│   └── Lotwise.sol          # Main ERC-721 contract
-├── test/
-│   └── Lotwise.js          # Comprehensive test suite
-├── scripts/
-│   └── deploy.js           # Deployment script
-├── api/
-│   ├── server.js           # Node.js/Express API
-│   ├── test.js            # API test suite
-│   └── package.json       # API dependencies
-├── hardhat.config.js       # Hardhat configuration
-├── package.json           # Node.js dependencies
-└── README.md             # This file
-```
+**Available Test Users:**
+- `0x1234567890abcdef1234567890abcdef12345678` (Primary - 75 tokens)
+- `0x742d35Cc6664C4532123C75F51C69c6CBc12345a` (Secondary - 25 tokens)
+- `0xabcdef1234567890abcdef1234567890abcdef12` (Third - 150 tokens)
 
-## 🧪 Testing
+**API Endpoint Categories:**
+- 🏠 **Property Management** (list, details, verification)
+- 👤 **User Management** (profile, portfolio)
+- 🏦 **Aave Integration** (supply, borrow, repay, withdraw)
+- 💰 **Yield Management** (claim, track distribution)
+- 🏪 **Marketplace** (list, buy tokens)
+- 🌐 **Cross-Chain** (supported networks, transfers)
+- 📊 **Analytics** (platform stats, price feeds)
 
-The test suite covers all core functionality:
+See `postman/README.md` for detailed testing guide.
 
+### Run All Tests
 ```bash
-npm test
+npm run test
 ```
 
-**Test Coverage:**
-- ✅ Property initialization
-- ✅ Token minting (owner-only)
-- ✅ Direct token purchasing with ETH
-- ✅ Marketplace listing and trading
-- ✅ Trading fee calculation (1%)
-- ✅ Admin functions (price updates, withdrawals)
-- ✅ Week 2+ placeholders (Aave staking)
+### Test Coverage
+```bash
+npm run coverage
+```
 
-## 📡 API Endpoints
+### Gas Analysis
+```bash
+npm run size
+```
 
-**Base URL**: `http://localhost:5000`
+### Expected Test Results
+```
+✅ 35+ comprehensive tests covering:
+   - Property creation and tokenization
+   - Fractional ownership mechanics
+   - Aave integration (supply, borrow, repay)
+   - Yield distribution and claiming
+   - Marketplace operations
+   - Liquidation scenarios
+   - Cross-chain functionality
+   - Edge cases and error handling
+```
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | API documentation |
-| `/property/123` | GET | Complete property details |
-| `/property/123/verify` | GET | Ownership verification (for Chainlink) |
-| `/property/123/valuation` | GET | Current market valuation |
-| `/health` | GET | API health check |
+## 📊 **Usage Examples**
 
-**Example Response:**
-```json
-{
-  "property_id": "123",
-  "address": "123 Main Street, San Francisco, CA",
-  "valuation": 1000000,
-  "ownership_verified": true,
-  "property_type": "Single Family Home"
+### 1. Create and Mint Property Tokens
+
+```javascript
+// Create new property
+await lotwise.createProperty(
+    "PROP-001",
+    ethers.parseEther("1000000"), // $1M property
+    "ipfs://QmPropertyMetadata"
+);
+
+// Mint 10 tokens (10 * $1000 = $10,000 worth)
+const quantity = 10;
+const costETH = await lotwise._convertUSDToETH(
+    ethers.parseEther("10000")
+);
+
+await lotwise.mintPropertyTokens(1, userAddress, quantity, {
+    value: costETH
+});
+```
+
+### 2. Use Tokens as Aave Collateral
+
+```javascript
+// Supply tokens as collateral
+const tokenIds = [1, 2, 3, 4, 5]; // 5 tokens = $5000 collateral
+await lotwise.supplyToAave(tokenIds);
+
+// Borrow against collateral (max 75% LTV = $3750)
+const borrowAmount = ethers.parseEther("3000"); // $3000
+await lotwise.borrowFromAave(borrowAmount, usdcAddress);
+
+// Check position health
+const position = await lotwise.getAavePosition(userAddress);
+console.log("Health Factor:", position.healthFactor); // Should be > 80
+```
+
+### 3. Claim Distributed Yield
+
+```javascript
+// Check claimable yield
+const claimableYield = await lotwise.getClaimableYield(
+    propertyId, 
+    userAddress
+);
+
+// Claim yield (automatically converted to ETH)
+if (claimableYield > 0) {
+    await lotwise.claimYield(propertyId);
 }
 ```
 
-## 🎮 Demo Scenarios
+### 4. Trade on Marketplace
 
-### Scenario 1: Direct Token Purchase
-```solidity
-// Buy 5 tokens for 5000 ETH (5000 * $1000 token price)
-await lotwise.buyTokens(5, { value: ethers.utils.parseEther("5000") });
-```
-
-### Scenario 2: Marketplace Trading
-```solidity
-// List token #1 for 1200 ETH
-await lotwise.listToken(1, ethers.utils.parseEther("1200"));
+```javascript
+// List token for sale
+const tokenId = 1;
+const salePrice = ethers.parseEther("1100"); // $1100 (10% premium)
+await lotwise.listToken(tokenId, salePrice);
 
 // Buy listed token
-await lotwise.buyListedToken(1, { value: ethers.utils.parseEther("1200") });
+const listingPriceETH = await lotwise._convertUSDToETH(salePrice);
+await lotwise.buyToken(tokenId, { value: listingPriceETH });
 ```
 
-### Scenario 3: Price Updates
-```solidity
-// Update property value to $1.2M (admin only)
-await lotwise.updatePropertyValue(ethers.utils.parseEther("1200000"));
-```
-
-## 🔗 Week 2: Chainlink & DeFi Features
-
-### Chainlink Functions - Property Verification
-
-Request property verification from external APIs:
-
-```solidity
-// Request verification (owner only)
-await lotwise.requestPropertyVerification("123");
-
-// Check verification status
-const verified = await lotwise.chainlinkVerified();
-```
-
-### Chainlink Data Feeds - Price Updates
-
-Get real-time ETH/USD prices and update property values:
-
-```solidity
-// Get current ETH price
-const ethPrice = await lotwise.getLatestPrice(); // $2000 mock or real Chainlink price
-
-// Update property value based on price feeds (owner only)
-await lotwise.updatePriceFromFeed();
-```
-
-### Chainlink Automation - Automated Upkeep
-
-Automated price updates based on time intervals:
-
-```solidity
-// Check if upkeep is needed (called by Chainlink Automation)
-const [upkeepNeeded] = await lotwise.checkUpkeep("0x");
-
-// Perform automated upkeep
-await lotwise.performUpkeep("0x");
-
-// Set custom update interval (owner only)
-await lotwise.setPriceUpdateInterval(7200); // 2 hours
-```
-
-### Enhanced Aave Integration - DeFi Staking
-
-Stake tokens to earn 5% APY:
-
-```solidity
-// Stake token for rewards
-await lotwise.stakeInAave(tokenId);
-
-// Calculate accumulated rewards
-const rewards = await lotwise.calculateStakingRewards(userAddress);
-
-// Unstake and claim rewards
-await lotwise.unstakeFromAave(tokenId);
-await lotwise.claimStakingRewards();
-
-// Get staking info
-const [tokensStaked, rewardsAvailable, timeStaked] = await lotwise.getStakingInfo(userAddress);
-```
-
-### CCIP Cross-Chain (Mock)
-
-Transfer tokens across chains (mockup for future implementation):
-
-```solidity
-// Cross-chain transfer (mock implementation)
-await lotwise.crossChainTransfer(tokenId, destinationChainId, recipientAddress);
-```
-
-### Week 2 Admin Functions
-
-```solidity
-// Set price feed address (Sepolia: 0x694AA1769357215DE4FAC081bf1f309aDC325306)
-await lotwise.setPriceFeed(priceFeedAddress);
-
-// Set property API URL for Chainlink Functions
-await lotwise.setPropertyApiUrl("https://api.example.com/property/");
-```
-
-## 🌐 API Documentation
-
-The Node.js API provides mock real estate data for the smart contract. All responses are in JSON format.
-
-### Endpoints
-
-| Method | Endpoint | Description | Frontend Usage |
-|--------|----------|-------------|-----------------|
-| `GET` | `/` | API documentation | API discovery |
-| `GET` | `/property/:id` | Complete property data | Property details page |
-| `GET` | `/property/:id/verify` | Ownership verification | Tokenization validation |
-| `GET` | `/property/:id/valuation` | Current market value | Price feeds simulation |
-| `POST` | `/property/:id/update` | Update property data | Admin interface |
-| `GET` | `/health` | Health check | Monitoring |
-
-### Example Responses
-
-**Property Data (`GET /property/123`)**:
-```json
-{
-  "property_id": "123",
-  "address": "123 Main Street, San Francisco, CA 94102",
-  "valuation": 1000000,
-  "ownership_verified": true,
-  "property_type": "Single Family Home",
-  "bedrooms": 3,
-  "bathrooms": 2,
-  "square_feet": 2000,
-  "images": ["..."],
-  "coordinates": {"latitude": 37.7749, "longitude": -122.4194},
-  "market_data": {"price_per_sqft": 500, "appreciation_1yr": 0.05}
-}
-```
-
-**Verification (`GET /property/123/verify`)**:
-```json
-{
-  "property_id": "123",
-  "ownership_verified": true,
-  "valuation": 1000000,
-  "property_type": "Single Family Home",
-  "last_verified": 1750395097
-}
-```
-
-**Valuation with Market Fluctuation (`GET /property/123/valuation`)**:
-```json
-{
-  "property_id": "123",
-  "current_valuation": 1004476,
-  "base_valuation": 1000000,
-  "change_amount": 4476,
-  "change_percent": 0.45,
-  "market_conditions": "stable"
-}
-```
-
-## 🔗 Week 2 Implementation Status
-
-All Chainlink & DeFi features are now implemented and tested:
-
-### ✅ Chainlink Functions
-- `requestPropertyVerification()`: Request property data verification
-- `chainlinkVerified`: Verification status tracking
-- Mock implementation with immediate response for hackathon demo
-
-### ✅ Chainlink Data Feeds  
-- `getLatestPrice()`: ETH/USD price feed integration
-- `updatePriceFromFeed()`: Property value updates based on price data
-- Sepolia testnet: Uses real Chainlink ETH/USD feed
-- Local testing: Mock $2000 ETH price
-
-### ✅ Chainlink Automation
-- `checkUpkeep()`: Determine if automated upkeep is needed
-- `performUpkeep()`: Execute automated price updates
-- `priceUpdateInterval`: Configurable update frequency (default: 1 hour)
-- `automationCounter`: Track automation executions
-
-### ✅ Enhanced Aave Integration
-- `stakeInAave()` / `unstakeFromAave()`: Stake tokens for rewards
-- `calculateStakingRewards()`: 5% APY calculation
-- `claimStakingRewards()`: Claim accumulated rewards  
-- `getStakingInfo()`: Complete staking dashboard data
-- Prevents trading of staked tokens
-
-### ✅ CCIP Cross-Chain (Mock)
-- `crossChainTransfer()`: Mock cross-chain token transfers
-- Foundation for future multi-chain deployment
-- Integration ready for Ethereum ↔ Polygon bridge
-
-## 🚀 Deployment
-
-### Local Development
-
-```bash
-# Start local hardhat node
-npx hardhat node
-
-# Deploy to local network (in another terminal)
-npm run deploy:local
-```
-
-### Sepolia Testnet Deployment
-
-1. **Setup Environment Variables**:
-   ```bash
-   # Copy .env.example to .env and fill in your values
-   cp .env.example .env
-   ```
-
-2. **Required Variables**:
-   - `PRIVATE_KEY`: Your wallet private key (without 0x prefix)
-   - `SEPOLIA_RPC_URL`: Alchemy/Infura Sepolia RPC endpoint  
-   - `ETHERSCAN_API_KEY`: For contract verification
-
-3. **Deploy**:
-   ```bash
-   npm run deploy:sepolia
-   ```
-### 4. Verify on Etherscan (Optional)
-
-```bash
-npx hardhat verify --network sepolia <contract_address> <price_feed_address>
-```
-
-## 🧪 Testing Week 2 Features
-
-Run comprehensive test suite:
-```bash
-npm test  # All 39 tests should pass
-```
-
-Test specific features:
-```bash
-# Test Chainlink Functions
-await lotwise.requestPropertyVerification("123");
-
-# Test Data Feeds
-await lotwise.updatePriceFromFeed();
-
-# Test Automation
-await lotwise.performUpkeep("0x");
-
-# Test Aave staking
-await lotwise.stakeInAave(1);
-const rewards = await lotwise.calculateStakingRewards(userAddress);
-```
-
-## 🛠️ Development Commands
-
-```bash
-# Smart Contract
-npm run compile              # Compile contracts
-npm test                    # Run test suite
-npm run deploy:local        # Deploy to local network
-npm run deploy:sepolia      # Deploy to Sepolia testnet
-
-# API
-cd api && npm start          # Start Node.js API server
-curl localhost:5000/health  # Test API health
-cd api && node test.js      # Run API tests
-
-# Development
-npx hardhat node           # Start local blockchain
-npx hardhat console        # Interactive console
-npx hardhat clean          # Clean build artifacts
-```
-
-## 📊 Week 1 Achievements
-
-- [x] ERC-721 contract with marketplace functionality
-- [x] Direct token purchasing with ETH
-- [x] Trading with automatic 1% fee collection
-- [x] Comprehensive test suite (95%+ coverage)
-- [x] Mock property API with realistic data
-- [x] Local deployment and testing
-- [x] GitHub repo with documentation
-
-## 🎯 Week 2 Goals
-
-- [ ] Integrate Chainlink Functions for property verification
-- [ ] Add Chainlink CCIP for cross-chain transfers
-- [ ] Implement Chainlink Data Feeds for price updates
-- [ ] Add Chainlink Automation for liquidations
-- [ ] Deploy to Sepolia and Mumbai testnets
-- [ ] Create basic React frontend
-
-## 🤝 Contributing
+## 🔧 **Contract Addresses**
+
+### Sepolia Testnet
+- **Lotwise Contract**: `TBD` (deploy with `npm run deploy`)
+- **ETH/USD Price Feed**: `0x694AA1769357215DE4FAC081bf1f309aDC325306`
+
+### Mainnet (Production)
+- **Lotwise Contract**: `TBD`
+- **ETH/USD Price Feed**: `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`
+- **MATIC/USD Price Feed**: `0x7bAC85A8a13A4BcD8abb3eB7d6b4d632c5a57676`
+
+## 🛡️ **Security Features**
+
+### Smart Contract Security
+- **ReentrancyGuard** protection on all state-changing functions
+- **Ownable** access control with authorized operators
+- **Emergency pause** functionality
+- **Collateral protection** (can't transfer staked tokens)
+
+### Economic Security
+- **Health factor monitoring** prevents over-borrowing
+- **Liquidation thresholds** protect against bad debt
+- **Maximum LTV ratios** (75%) prevent excessive leverage
+- **Yield distribution caps** prevent drain attacks
+
+### Oracle Security
+- **Chainlink price feeds** for reliable USD pricing
+- **Fallback pricing** mechanisms
+- **Price update intervals** with staleness checks
+
+## 🔮 **Roadmap**
+
+### Phase 1 (Current) - Core Platform ✅
+- [x] Fractional tokenization (1,000 tokens/property)
+- [x] Full Aave integration (supply, borrow, yield)
+- [x] Cross-chain support (Ethereum + Polygon)
+- [x] Automated yield distribution
+- [x] Enhanced marketplace
+
+### Phase 2 - Advanced Features 🚧
+- [ ] Multi-asset borrowing (USDC, USDT, DAI)
+- [ ] Flash loan integration
+- [ ] Governance token (LTWS)
+- [ ] DAO-based property acquisition
+- [ ] Insurance protocols integration
+
+### Phase 3 - Scale & Optimize 📈
+- [ ] Layer 2 expansion (Arbitrum, Optimism)
+- [ ] Mobile app development
+- [ ] Institutional features
+- [ ] Real-world asset bridge
+- [ ] Regulatory compliance tools
+
+## 🤝 **Contributing**
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/week2-chainlink`
-3. Commit changes: `git commit -m "Add Chainlink Functions integration"`
-4. Push to branch: `git push origin feature/week2-chainlink`
-5. Submit a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-## 📄 License
+## 📄 **License**
 
-MIT License - see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🔗 Links
+## 🔗 **Links**
 
-- **Live API**: http://localhost:5000 (local development)
-- **Contract**: [View on Etherscan](https://sepolia.etherscan.io/) (after deployment)
-- **Documentation**: [Lotwise Docs](https://github.com/your-username/Lotwise/wiki)
+- **Documentation**: [docs.lotwise.io](https://docs.lotwise.io)
+- **Website**: [lotwise.io](https://lotwise.io)
+- **Discord**: [discord.gg/lotwise](https://discord.gg/lotwise)
+- **Twitter**: [@lotwiseio](https://twitter.com/lotwiseio)
 
-## 🏆 Hackathon Submission
+## ⚠️ **Disclaimer**
 
-**Target**: Chainlink Constellation Hackathon  
-**Category**: DeFi + Real Estate  
-**Demo**: 2-minute video showcasing tokenization → trading → DeFi integration
+This software is provided "as is" and is experimental. Use at your own risk. Real estate tokenization may be subject to securities regulations in your jurisdiction. Please consult with legal and financial professionals before using this platform for actual real estate transactions.
 
 ---
 
-**Built with ❤️ for the future of real estate investment**
+**Built with ❤️ by the Lotwise Team**

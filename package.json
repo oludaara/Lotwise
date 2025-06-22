@@ -1,16 +1,21 @@
 {
   "name": "lotwise",
-  "version": "1.0.0",
-  "description": "Tokenized Real Estate with DeFi Integration",
+  "version": "2.0.0",
+  "description": "Advanced Fractional Real Estate Tokenization with Full Aave Integration",
   "main": "index.js",
   "scripts": {
-    "compile": "npx hardhat compile",
     "test": "npx hardhat test",
-    "node": "npx hardhat node",
+    "deploy": "npx hardhat run scripts/deploy.js --network sepolia",
     "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
-    "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "compile": "npx hardhat compile",
+    "node": "npx hardhat node",
     "start:api": "cd api && npm start",
-    "lint": "npx hardhat check"
+    "coverage": "npx hardhat coverage",
+    "size": "npx hardhat size-contracts",
+    "clean": "npx hardhat clean",
+    "verify": "npx hardhat verify --network sepolia",
+    "dev": "concurrently \"npm run node\" \"npm run start:api\"",
+    "build": "npm run compile && npm run test"
   },
   "keywords": [
     "blockchain",
@@ -28,6 +33,7 @@
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
     "@openzeppelin/contracts": "^4.9.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "concurrently": "^7.6.0"
   }
 }
