@@ -25,6 +25,20 @@ Lotwise is an advanced decentralized platform for **fractional real estate owner
 - **Multi-chain portfolio** management
 - **Unified liquidity** across networks
 
+### 🏔️ **Network Support**
+- **Ethereum Sepolia** (Primary testnet)
+- **Avalanche Fuji** (Avalanche testnet)
+- **Avalanche Mainnet** (C-Chain)
+- **Polygon** (Layer 2 scaling)
+- **Local Hardhat** (Development)
+
+| Network | Chain ID | RPC URL | Explorer | Status |
+|---------|----------|---------|----------|--------|
+| Ethereum Sepolia | 11155111 | `https://sepolia.infura.io/v3/...` | [Etherscan](https://sepolia.etherscan.io) | ✅ Active |
+| Avalanche Fuji | 43113 | `https://api.avax-test.network/ext/bc/C/rpc` | [Snowtrace](https://testnet.snowtrace.io) | ✅ Active |
+| Avalanche Mainnet | 43114 | `https://api.avax.network/ext/bc/C/rpc` | [Snowtrace](https://snowtrace.io) | ✅ Active |
+| Polygon | 137 | `https://polygon-rpc.com` | [PolygonScan](https://polygonscan.com) | 🔄 Planned |
+
 ### 📊 **Advanced DeFi Features**
 - **Automated yield distribution** every 24 hours
 - **Health factor monitoring** (liquidation at <80%)
@@ -154,6 +168,12 @@ npm run test
 # Deploy to Sepolia
 npm run deploy
 
+# Deploy to Avalanche Fuji Testnet
+npm run deploy:fuji
+
+# Deploy to Avalanche Mainnet
+npm run deploy:avalanche
+
 # Start API server
 npm run start:api
 ```
@@ -163,15 +183,26 @@ npm run start:api
 ```env
 # Network Configuration
 SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+AVALANCHE_RPC_URL=https://api.avax.network/ext/bc/C/rpc
 PRIVATE_KEY=your_private_key_here
 
 # Chainlink Price Feeds
-ETH_USD_PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
-MATIC_USD_PRICE_FEED=0x0000000000000000000000000000000000000000
+## Sepolia Testnet
+SEPOLIA_ETH_USD_PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
+
+## Avalanche Fuji Testnet
+FUJI_AVAX_USD_PRICE_FEED=0x5498BB86BC934c8D34FDA08E81D444153d0D06aD
+FUJI_ETH_USD_PRICE_FEED=0x86d67c3D38D2bCeE722E601025C25a575021c6EA
+
+## Avalanche Mainnet
+AVALANCHE_AVAX_USD_PRICE_FEED=0x0A77230d17318075983913bC2145DB16C7366156
+AVALANCHE_ETH_USD_PRICE_FEED=0x976B3D034E162d8bD72D6b9C989d545b839003b0
 
 # API Configuration
 PORT=3001
 NODE_ENV=production
+MONGODB_URI=mongodb://localhost:27017/lotwise
 ```
 
 ## 🧪 **Testing & API**
@@ -315,6 +346,16 @@ await lotwise.buyToken(tokenId, { value: listingPriceETH });
 - **Lotwise Contract**: `TBD` (deploy with `npm run deploy`)
 - **ETH/USD Price Feed**: `0x694AA1769357215DE4FAC081bf1f309aDC325306`
 
+### Avalanche Fuji Testnet
+- **Lotwise Contract**: `TBD` (deploy with `npm run deploy:fuji`)
+- **AVAX/USD Price Feed**: `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD`
+- **ETH/USD Price Feed**: `0x86d67c3D38D2bCeE722E601025C25a575021c6EA`
+
+### Avalanche Mainnet
+- **Lotwise Contract**: `TBD` (deploy with `npm run deploy:avalanche`)
+- **AVAX/USD Price Feed**: `0x0A77230d17318075983913bC2145DB16C7366156`
+- **ETH/USD Price Feed**: `0x976B3D034E162d8bD72D6b9C989d545b839003b0`
+
 ### Mainnet (Production)
 - **Lotwise Contract**: `TBD`
 - **ETH/USD Price Feed**: `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`
@@ -344,9 +385,12 @@ await lotwise.buyToken(tokenId, { value: listingPriceETH });
 ### Phase 1 (Current) - Core Platform ✅
 - [x] Fractional tokenization (1,000 tokens/property)
 - [x] Full Aave integration (supply, borrow, yield)
-- [x] Cross-chain support (Ethereum + Polygon)
+- [x] Cross-chain support (Ethereum + Avalanche)
 - [x] Automated yield distribution
 - [x] Enhanced marketplace
+- [x] Avalanche Fuji testnet support
+- [x] Complete database-driven backend
+- [x] Swagger API documentation
 
 ### Phase 2 - Advanced Features 🚧
 - [ ] Multi-asset borrowing (USDC, USDT, DAI)
@@ -354,6 +398,7 @@ await lotwise.buyToken(tokenId, { value: listingPriceETH });
 - [ ] Governance token (LTWS)
 - [ ] DAO-based property acquisition
 - [ ] Insurance protocols integration
+- [ ] Polygon network integration
 
 ### Phase 3 - Scale & Optimize 📈
 - [ ] Layer 2 expansion (Arbitrum, Optimism)

@@ -3,10 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { ethers } = require('ethers');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
-const mongoose = require('mongoose');
+const DatabaseConnection = require('./database/connection');
+
+// Import models
 const User = require('./models/User');
 const Property = require('./models/Property');
 const Marketplace = require('./models/Marketplace');
@@ -38,13 +39,13 @@ app.get('/', (req, res) => {
     res.redirect('/api-docs');
 });
 
-// MongoDB connection
-const MONGO_URI = process.env.MONGODB_URI;
-console.log('[Lotwise] Connecting to MongoDB:', MONGO_URI);
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('[Lotwise] MongoDB connected successfully!'))
+// Database connection
+DatabaseConnection.connect()
+    .then(() => {
+        console.log('[Lotwise] Database connected successfully!');
+    })
     .catch(err => {
-        console.error('[Lotwise] MongoDB connection error:', err);
+        console.error('[Lotwise] Database connection error:', err);
         process.exit(1);
     });
 
@@ -73,19 +74,37 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/liquidation', liquidationRouter);
 
 // Health check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        version: '2.0.0',
-        features: [
-            'Fractional Ownership',
-            'Aave Integration',
-            'Cross-chain Support',
-            'Yield Distribution',
-            'Liquidation Management'
-        ]
-    });
+app.get('/health', async (req, res) => {
+    try {
+        const dbStatus = DatabaseConnection.getConnectionStatus();
+        const dbHealthy = await DatabaseConnection.healthCheck();
+        
+        res.json({
+            status: dbHealthy ? 'healthy' : 'degraded',
+            timestamp: new Date().toISOString(),
+            version: '2.0.0',
+            database: {
+                connected: dbStatus.isConnected,
+                healthy: dbHealthy,
+                name: dbStatus.name || 'N/A'
+            },
+            features: [
+                'Fractional Ownership',
+                'Aave Integration',
+                'Cross-chain Support',
+                'Yield Distribution',
+                'Liquidation Management',
+                'Database Integration'
+            ]
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'unhealthy',
+            timestamp: new Date().toISOString(),
+            version: '2.0.0',
+            error: error.message
+        });
+    }
 });
 
 // Error handling middleware
