@@ -5,16 +5,16 @@
   "main": "index.js",
   "scripts": {
     "test": "npx hardhat test",
-    "deploy": "npx hardhat run scripts/deploy.js --network sepolia",
-    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy": "nodemon --watch scripts/deploy.js --exec \"npx hardhat run scripts/deploy.js --network sepolia\"",
+    "deploy:local": "nodemon --watch scripts/deploy.js --exec \"npx hardhat run scripts/deploy.js --network localhost\"",
     "compile": "npx hardhat compile",
     "node": "npx hardhat node",
-    "start:api": "cd api && npm start",
+    "start:api": "nodemon server.js",
     "coverage": "npx hardhat coverage",
     "size": "npx hardhat size-contracts",
     "clean": "npx hardhat clean",
     "verify": "npx hardhat verify --network sepolia",
-    "dev": "concurrently \"npm run node\" \"npm run start:api\"",
+    "dev": "concurrently \"npm run node\" \"cd api && nodemon server.js\"",
     "build": "npm run compile && npm run test"
   },
   "keywords": [
@@ -33,7 +33,16 @@
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
     "@openzeppelin/contracts": "^4.9.0",
-    "dotenv": "^16.3.1",
-    "concurrently": "^7.6.0"
+    "concurrently": "^7.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "ethers": "^6.14.4",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.16.0",
+    "nodemon": "^3.1.10",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

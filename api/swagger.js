@@ -67,6 +67,10 @@ const options = {
       {
         name: 'Liquidation',
         description: 'Liquidation monitoring and management'
+      },
+      {
+        name: 'Authentication',
+        description: 'Wallet-based authentication endpoints'
       }
     ],
     components: {
@@ -648,6 +652,56 @@ const options = {
               example: '0x1234567890abcdef1234567890abcdef12345678'
             }
           }
+        },
+        AuthNonceResponse: {
+          type: 'object',
+          properties: {
+            nonce: {
+              type: 'string',
+              description: 'Random nonce to be signed by the wallet',
+              example: '123456'
+            },
+            message: {
+              type: 'string',
+              description: 'Message to be signed',
+              example: 'Welcome to Lotwise! Please sign this message to verify your wallet ownership. Nonce: 123456'
+            }
+          }
+        },
+        AuthVerifyRequest: {
+          type: 'object',
+          required: ['address', 'signature'],
+          properties: {
+            address: {
+              type: 'string',
+              pattern: '^0x[a-fA-F0-9]{40}$',
+              description: 'Ethereum address of the user',
+              example: '0x1234567890abcdef1234567890abcdef12345678'
+            },
+            signature: {
+              type: 'string',
+              description: 'Signed message signature',
+              example: '0x...'
+            }
+          }
+        },
+        AuthResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              description: 'Whether the authentication was successful',
+              example: true
+            },
+            user: {
+              $ref: '#/components/schemas/User'
+            },
+            token: {
+              type: 'string',
+              description: 'JWT token for subsequent authenticated requests',
+              example: 'eyJhbGciOiJIUzI1NiIs...'
+            }
+          }
         }
       },
       responses: {
@@ -677,6 +731,892 @@ const options = {
             'application/json': {
               schema: {
                 $ref: '#/components/schemas/Error'
+              }
+            }
+          }
+        }
+      },
+      securitySchemes: {
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      }
+    },
+    security: [
+      {
+        BearerAuth: []
+      }
+    ],
+    paths: {
+      '/health': {
+        get: {
+          summary: 'Health check endpoint',
+          description: 'Returns the current health status of the API server and available features',
+          tags: ['Health'],
+          responses: {
+            200: {
+              description: 'Server is healthy',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/HealthStatus' }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/properties': {
+        get: {
+          summary: 'Get all properties',
+          description: 'Retrieve a list of all available properties in the platform',
+          tags: ['Properties'],
+          parameters: [
+            {
+              in: 'query',
+              name: 'limit',
+              schema: { type: 'integer', default: 10 },
+              description: 'Maximum number of properties to return'
+            },
+            {
+              in: 'query',
+              name: 'offset',
+              schema: { type: 'integer', default: 0 },
+              description: 'Number of properties to skip'
+            },
+            {
+              in: 'query',
+              name: 'verified',
+              schema: { type: 'boolean' },
+              description: 'Filter by verification status'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'List of properties retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      properties: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/Property' }
+                      },
+                      total: { type: 'number', example: 2 },
+                      limit: { type: 'number', example: 10 },
+                      offset: { type: 'number', example: 0 }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/properties/{id}': {
+        get: {
+          summary: 'Get property by ID',
+          description: 'Retrieve a property by its unique identifier',
+          tags: ['Properties'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'id',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Property ID'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'Property retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Property' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/properties/{id}/verify': {
+        post: {
+          summary: 'Verify property',
+          description: 'Verify a property by its ID',
+          tags: ['Properties'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'id',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Property ID'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'Property verified successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      verified: { type: 'boolean', example: true },
+                      message: { type: 'string', example: 'Property verified successfully' },
+                      valuation: { type: 'number', example: 1000000 }
+                    }
+                  }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/users/{address}': {
+        get: {
+          summary: 'Get user profile',
+          description: 'Retrieve user profile information including token holdings and Aave positions',
+          tags: ['Users'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'address',
+              required: true,
+              schema: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+              description: 'Ethereum address of the user',
+              example: '0x1234567890abcdef1234567890abcdef12345678'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'User profile retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/User' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/users/{address}/portfolio': {
+        get: {
+          summary: 'Get user portfolio',
+          description: 'Retrieve user portfolio including owned properties and Aave position',
+          tags: ['Users'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'address',
+              required: true,
+              schema: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+              description: 'Ethereum address of the user'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'User portfolio retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/UserPortfolio' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/aave/position/{address}': {
+        get: {
+          summary: 'Get Aave position',
+          description: 'Retrieve Aave lending/borrowing position for a user',
+          tags: ['Aave'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'address',
+              required: true,
+              schema: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+              description: 'Ethereum address of the user'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'Aave position retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/AavePosition' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/aave/supply': {
+        post: {
+          summary: 'Supply tokens as collateral',
+          description: 'Supply property tokens as collateral to Aave',
+          tags: ['Aave'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SupplyRequest' }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Tokens supplied as collateral successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transactionHash: { type: 'string' },
+                      suppliedAmount: { type: 'number' },
+                      newHealthFactor: { type: 'number' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/aave/borrow': {
+        post: {
+          summary: 'Borrow assets from Aave',
+          description: 'Borrow assets against supplied collateral',
+          tags: ['Aave'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BorrowRequest' }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Assets borrowed successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transactionHash: { type: 'string' },
+                      borrowedAmount: { type: 'number' },
+                      asset: { type: 'string' },
+                      newHealthFactor: { type: 'number' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/aave/repay': {
+        post: {
+          summary: 'Repay borrowed assets',
+          description: 'Repay borrowed assets to Aave',
+          tags: ['Aave'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RepayRequest' }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Loan repaid successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transactionHash: { type: 'string' },
+                      repaidAmount: { type: 'number' },
+                      asset: { type: 'string' },
+                      newHealthFactor: { type: 'number' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/yield/{propertyId}': {
+        get: {
+          summary: 'Get yield info for property',
+          description: 'Retrieve yield pool and APY for a property',
+          tags: ['Yield'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'propertyId',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Property ID'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'Yield info retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/YieldInfo' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/yield/{propertyId}/{address}': {
+        get: {
+          summary: 'Get user yield info for property',
+          description: 'Retrieve yield info for a user and property',
+          tags: ['Yield'],
+          parameters: [
+            {
+              in: 'path',
+              name: 'propertyId',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Property ID'
+            },
+            {
+              in: 'path',
+              name: 'address',
+              required: true,
+              schema: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+              description: 'User address'
+            }
+          ],
+          responses: {
+            200: {
+              description: 'User yield info retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/UserYieldInfo' }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/yield/claim': {
+        post: {
+          summary: 'Claim yield',
+          description: 'Claim yield for a property',
+          tags: ['Yield'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ClaimYieldRequest' }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Yield claimed successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transactionHash: { type: 'string' },
+                      claimedAmount: { type: 'number' },
+                      propertyId: { type: 'string' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/marketplace': {
+        get: {
+          summary: 'Get marketplace listings',
+          description: 'Retrieve active marketplace listings',
+          tags: ['Marketplace'],
+          parameters: [
+            { in: 'query', name: 'propertyId', schema: { type: 'string' }, description: 'Property ID' },
+            { in: 'query', name: 'minPrice', schema: { type: 'number' }, description: 'Minimum price' },
+            { in: 'query', name: 'maxPrice', schema: { type: 'number' }, description: 'Maximum price' },
+            { in: 'query', name: 'limit', schema: { type: 'integer', default: 20 }, description: 'Max listings' },
+            { in: 'query', name: 'offset', schema: { type: 'integer', default: 0 }, description: 'Offset' }
+          ],
+          responses: {
+            200: {
+              description: 'Listings retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      listings: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/MarketplaceListing' }
+                      },
+                      total: { type: 'number' },
+                      limit: { type: 'number' },
+                      offset: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/marketplace/list': {
+        post: {
+          summary: 'List token for sale',
+          description: 'List a property token for sale on the marketplace',
+          tags: ['Marketplace'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    tokenId: { type: 'number' },
+                    price: { type: 'number' },
+                    seller: { type: 'string' },
+                    propertyId: { type: 'string' }
+                  },
+                  required: ['tokenId', 'price', 'seller', 'propertyId']
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Token listed successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      listing: { $ref: '#/components/schemas/MarketplaceListing' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/marketplace/buy': {
+        post: {
+          summary: 'Buy token from marketplace',
+          description: 'Buy a listed property token from the marketplace',
+          tags: ['Marketplace'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    listingId: { type: 'number' },
+                    buyer: { type: 'string' }
+                  },
+                  required: ['listingId', 'buyer']
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Token purchased successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transactionHash: { type: 'string' },
+                      tokenId: { type: 'number' },
+                      price: { type: 'number' },
+                      seller: { type: 'string' },
+                      buyer: { type: 'string' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            404: { $ref: '#/components/responses/NotFound' },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/prices/current': {
+        get: {
+          summary: 'Get current prices',
+          description: 'Get the latest ETH and MATIC prices',
+          tags: ['Prices'],
+          responses: {
+            200: {
+              description: 'Current prices',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      timestamp: { type: 'string', format: 'date-time' },
+                      ethPrice: { type: 'number' },
+                      maticPrice: { type: 'number' },
+                      source: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/prices/history': {
+        get: {
+          summary: 'Get price history',
+          description: 'Get historical price data for ETH and MATIC',
+          tags: ['Prices'],
+          parameters: [
+            { in: 'query', name: 'days', schema: { type: 'integer', default: 7 }, description: 'Number of days of history' }
+          ],
+          responses: {
+            200: {
+              description: 'Price history',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      history: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            timestamp: { type: 'string' },
+                            ethPrice: { type: 'number' },
+                            maticPrice: { type: 'number' }
+                          }
+                        }
+                      },
+                      period: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/crosschain/supported': {
+        get: {
+          summary: 'Get supported cross-chain networks',
+          description: 'List supported cross-chain networks',
+          tags: ['Cross-Chain'],
+          responses: {
+            200: {
+              description: 'Supported chains',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      supportedChains: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            chainId: { type: 'number' },
+                            name: { type: 'string' },
+                            symbol: { type: 'string' },
+                            active: { type: 'boolean' }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/crosschain/transfer': {
+        post: {
+          summary: 'Initiate cross-chain transfer',
+          description: 'Transfer a token across supported chains',
+          tags: ['Cross-Chain'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    tokenId: { type: 'number' },
+                    fromChain: { type: 'number' },
+                    toChain: { type: 'number' },
+                    recipient: { type: 'string' }
+                  },
+                  required: ['tokenId', 'fromChain', 'toChain', 'recipient']
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Cross-chain transfer initiated',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', example: true },
+                      transferId: { type: 'string' },
+                      tokenId: { type: 'number' },
+                      fromChain: { type: 'number' },
+                      toChain: { type: 'number' },
+                      recipient: { type: 'string' },
+                      estimatedTime: { type: 'string' },
+                      message: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/analytics/platform': {
+        get: {
+          summary: 'Get platform analytics',
+          description: 'Retrieve platform-wide analytics and statistics',
+          tags: ['Analytics'],
+          responses: {
+            200: {
+              description: 'Platform analytics',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      totalProperties: { type: 'number' },
+                      totalTokens: { type: 'number' },
+                      totalValue: { type: 'number' },
+                      totalSuppliedToAave: { type: 'number' },
+                      totalBorrowedFromAave: { type: 'number' },
+                      totalYieldDistributed: { type: 'number' },
+                      averageAPY: { type: 'number' },
+                      activeListings: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/liquidation/risks': {
+        get: {
+          summary: 'Get liquidation risks',
+          description: 'Retrieve positions at risk of liquidation',
+          tags: ['Liquidation'],
+          responses: {
+            200: {
+              description: 'Liquidation risk data',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      atRiskPositions: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            address: { type: 'string' },
+                            healthFactor: { type: 'number' },
+                            collateralValue: { type: 'number' },
+                            borrowedAmount: { type: 'number' },
+                            liquidationThreshold: { type: 'number' },
+                            timeToLiquidation: { type: 'string' }
+                          }
+                        }
+                      },
+                      totalAtRisk: { type: 'number' },
+                      averageHealthFactor: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            },
+            500: { $ref: '#/components/responses/InternalServerError' }
+          }
+        }
+      },
+      '/api/auth/nonce': {
+        post: {
+          summary: 'Get authentication nonce',
+          description: 'Request a nonce for wallet signature authentication',
+          tags: ['Authentication'],
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['address'],
+                  properties: {
+                    address: {
+                      type: 'string',
+                      pattern: '^0x[a-fA-F0-9]{40}$',
+                      description: 'Ethereum address of the user',
+                      example: '0x1234567890abcdef1234567890abcdef12345678'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Nonce generated successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/AuthNonceResponse'
+                  }
+                }
+              }
+            },
+            400: {
+              description: 'Invalid request',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      error: {
+                        type: 'string',
+                        example: 'Address is required'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/auth/verify': {
+        post: {
+          summary: 'Verify wallet signature',
+          description: 'Verify wallet signature and authenticate user',
+          tags: ['Authentication'],
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/AuthVerifyRequest'
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Authentication successful',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/AuthResponse'
+                  }
+                }
+              }
+            },
+            400: {
+              description: 'Invalid request',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      error: {
+                        type: 'string',
+                        example: 'Address and signature are required'
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            401: {
+              description: 'Authentication failed',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      error: {
+                        type: 'string',
+                        example: 'Invalid signature'
+                      }
+                    }
+                  }
+                }
               }
             }
           }
