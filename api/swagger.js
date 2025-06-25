@@ -71,6 +71,10 @@ const options = {
       {
         name: 'Authentication',
         description: 'Wallet-based authentication endpoints'
+      },
+      {
+        name: 'Wallet',
+        description: 'Multi-chain wallet connection and management'
       }
     ],
     components: {
@@ -1601,18 +1605,18 @@ const options = {
                     }
                   }
                 }
-              }
-            },
-            401: {
-              description: 'Authentication failed',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      error: {
-                        type: 'string',
-                        example: 'Invalid signature'
+              },
+              401: {
+                description: 'Authentication failed',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        error: {
+                          type: 'string',
+                          example: 'Invalid signature'
+                        }
                       }
                     }
                   }

@@ -45,8 +45,9 @@ DatabaseConnection.connect()
         console.log('[Lotwise] Database connected successfully!');
     })
     .catch(err => {
-        console.error('[Lotwise] Database connection error:', err);
-        process.exit(1);
+        console.error('[Lotwise] Database connection error:', err.message);
+        console.log('📘 Server will continue running without database features');
+        // Don't exit - allow server to run for testing wallet endpoints
     });
 
 // Import routers
@@ -60,6 +61,7 @@ const pricesRouter = require('./routes/prices')({ PriceHistory });
 const crosschainRouter = require('./routes/crosschain')({});
 const analyticsRouter = require('./routes/analytics')({ Property, Marketplace });
 const liquidationRouter = require('./routes/liquidation')({ User });
+const walletRouter = require('./routes/wallet')({ User });
 
 // Mount routers
 app.use('/api/auth', authRouter);
@@ -72,6 +74,7 @@ app.use('/api/prices', pricesRouter);
 app.use('/api/crosschain', crosschainRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/liquidation', liquidationRouter);
+app.use('/api/wallet', walletRouter);
 
 // Health check
 app.get('/health', async (req, res) => {
@@ -94,7 +97,9 @@ app.get('/health', async (req, res) => {
                 'Cross-chain Support',
                 'Yield Distribution',
                 'Liquidation Management',
-                'Database Integration'
+                'Database Integration',
+                'Multi-Chain Wallet Connection',
+                'CCIP Cross-Chain Transfers'
             ]
         });
     } catch (error) {
@@ -127,7 +132,7 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
-    console.log(`\n🚀 Lotwise API Server Started\n==================================\n📍 Port: ${PORT}\n🌐 Environment: ${process.env.NODE_ENV || 'development'}\n📊 Features: Fractional ownership, Aave integration, Cross-chain support\n🔗 Health Check: http://localhost:${PORT}/health\n📖 Endpoints:\n   - Properties: /api/properties\n   - Users: /api/users/:address\n   - Aave: /api/aave/*\n   - Yield: /api/yield/*\n   - Marketplace: /api/marketplace\n   - Cross-chain: /api/crosschain/*\n   - Analytics: /api/analytics/*\n==================================\n    `);
+    console.log(`\n🚀 Lotwise API Server Started\n==================================\n📍 Port: ${PORT}\n🌐 Environment: ${process.env.NODE_ENV || 'development'}\n📊 Features: Fractional ownership, Aave integration, Cross-chain support\n🔗 Health Check: http://localhost:${PORT}/health\n📖 Endpoints:\n   - Properties: /api/properties\n   - Users: /api/users/:address\n   - Aave: /api/aave/*\n   - Yield: /api/yield/*\n   - Marketplace: /api/marketplace\n   - Cross-chain: /api/crosschain/*\n   - Analytics: /api/analytics/*\n   - Wallet: /api/wallet/* (NEW!)\n🔗 Multi-Chain Support:\n   - Ethereum Sepolia (Testnet)\n   - Polygon Mumbai (Testnet)\n   - Avalanche Fuji (Testnet)\n   - CCIP Cross-Chain Transfers\n==================================\n    `);
 });
 
 module.exports = app;

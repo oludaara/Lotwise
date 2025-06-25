@@ -25,13 +25,10 @@ class DatabaseConnection {
             console.log('🔗 Connecting to MongoDB:', mongoUri.replace(/\/\/.*@/, '//***:***@'));
 
             this.connection = await mongoose.connect(mongoUri, {
-                useNewUrlParser: true,
-                useUnifiedTopology: true,
                 maxPoolSize: 10,
                 serverSelectionTimeoutMS: 5000,
                 socketTimeoutMS: 45000,
-                bufferCommands: false,
-                bufferMaxEntries: 0
+                bufferCommands: false
             });
 
             this.isConnected = true;
