@@ -19,6 +19,9 @@ const propertySchema = new mongoose.Schema({
         lng: Number
     },
     verified: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: false },
+    verificationTimestamp: Date,
+    verificationData: String,
     aaveStats: {
         totalSupplied: Number,
         totalBorrowed: Number,

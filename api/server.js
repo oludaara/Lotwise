@@ -59,6 +59,8 @@ const pricesRouter = require('./routes/prices')({ PriceHistory });
 const crosschainRouter = require('./routes/crosschain')({});
 const analyticsRouter = require('./routes/analytics')({ Property, Marketplace });
 const liquidationRouter = require('./routes/liquidation')({ User });
+const functionsRouter = require('./routes/functions')({ Property });
+const walletRouter = require('./routes/wallet')({ User });
 
 // Mount routers
 app.use('/api/auth', authRouter);
@@ -71,6 +73,8 @@ app.use('/api/prices', pricesRouter);
 app.use('/api/crosschain', crosschainRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/liquidation', liquidationRouter);
+app.use('/api/functions', functionsRouter);
+app.use('/api/wallet', walletRouter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -81,9 +85,12 @@ app.get('/health', (req, res) => {
         features: [
             'Fractional Ownership',
             'Aave Integration',
-            'Cross-chain Support',
+            'Cross-chain Support (ETH, Polygon, AVAX)',
             'Yield Distribution',
-            'Liquidation Management'
+            'Liquidation Management',
+            'Chainlink Functions Verification',
+            'Real-time Analytics',
+            'Enhanced Risk Monitoring'
         ]
     });
 });
@@ -108,7 +115,7 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
-    console.log(`\n🚀 Lotwise API Server Started\n==================================\n📍 Port: ${PORT}\n🌐 Environment: ${process.env.NODE_ENV || 'development'}\n📊 Features: Fractional ownership, Aave integration, Cross-chain support\n🔗 Health Check: http://localhost:${PORT}/health\n📖 Endpoints:\n   - Properties: /api/properties\n   - Users: /api/users/:address\n   - Aave: /api/aave/*\n   - Yield: /api/yield/*\n   - Marketplace: /api/marketplace\n   - Cross-chain: /api/crosschain/*\n   - Analytics: /api/analytics/*\n==================================\n    `);
+    console.log(`\n🚀 Lotwise API Server Started\n==================================\n📍 Port: ${PORT}\n🌐 Environment: ${process.env.NODE_ENV || 'development'}\n📊 Features: Fractional ownership, Aave integration, Cross-chain support\n🔗 Health Check: http://localhost:${PORT}/health\n📖 Endpoints:\n   - Properties: /api/properties\n   - Users: /api/users/:address\n   - Aave: /api/aave/*\n   - Yield: /api/yield/*\n   - Marketplace: /api/marketplace\n   - Cross-chain: /api/crosschain/*\n   - Analytics: /api/analytics/*\n   - Liquidation: /api/liquidation/*\n   - Functions: /api/functions/*\n==================================\n    `);
 });
 
 module.exports = app;
