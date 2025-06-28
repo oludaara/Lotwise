@@ -12,7 +12,9 @@ module.exports = (mockDB) => {
                     symbol: 'ETH',
                     active: true,
                     routerAddress: '0xE561d5E02207fb5eB32cca20a699E0d8919a1476',
-                    ccipEnabled: true
+                    ccipEnabled: true,
+                    network: 'mainnet',
+                    ccipSelector: '5009297550715157269'
                 },
                 {
                     chainId: 137,
@@ -20,23 +22,9 @@ module.exports = (mockDB) => {
                     symbol: 'MATIC',
                     active: true,
                     routerAddress: '0x3C3D92629A02a8D95D5CB9650fe49C3544f69B43',
-                    ccipEnabled: true
-                },
-                {
-                    chainId: 11155111,
-                    name: 'Sepolia',
-                    symbol: 'ETH',
-                    active: true,
-                    routerAddress: '0xD0daae2231E9CB96b94C8512223533293C3693Bf',
-                    ccipEnabled: true
-                },
-                {
-                    chainId: 80001,
-                    name: 'Mumbai',
-                    symbol: 'MATIC',
-                    active: true,
-                    routerAddress: '0x70499c328e1E2a3c4d6fC7C8C8C8C8C8C8C8C8C8',
-                    ccipEnabled: true
+                    ccipEnabled: true,
+                    network: 'mainnet',
+                    ccipSelector: '4051577828743386545'
                 },
                 {
                     chainId: 43114,
@@ -44,7 +32,30 @@ module.exports = (mockDB) => {
                     symbol: 'AVAX',
                     active: true,
                     routerAddress: '0x27a4E2900F5b2cE6B3C8C8C8C8C8C8C8C8C8C8C8',
-                    ccipEnabled: true
+                    ccipEnabled: true,
+                    network: 'mainnet',
+                    ccipSelector: '6433500567565415381'
+                },
+                {
+                    chainId: 11155111,
+                    name: 'Sepolia',
+                    symbol: 'ETH',
+                    active: true,
+                    routerAddress: '0xD0daae2231E9CB96b94C8512223533293C3693Bf',
+                    ccipEnabled: true,
+                    network: 'testnet',
+                    ccipSelector: '16015286601757825753',
+                    primary: true
+                },
+                {
+                    chainId: 80001,
+                    name: 'Mumbai',
+                    symbol: 'MATIC',
+                    active: true,
+                    routerAddress: '0x70499c328e1E2a3c4d6fC7C8C8C8C8C8C8C8C8C8',
+                    ccipEnabled: true,
+                    network: 'testnet',
+                    ccipSelector: '12532609583862916517'
                 },
                 {
                     chainId: 43113,
@@ -52,9 +63,22 @@ module.exports = (mockDB) => {
                     symbol: 'AVAX',
                     active: true,
                     routerAddress: '0x8C8C8C8C8C8C8C8C8C8C8C8C8C8C8C8C8C8C8C8',
-                    ccipEnabled: true
+                    ccipEnabled: true,
+                    network: 'testnet',
+                    ccipSelector: '14767482510784806043'
                 }
-            ]
+            ],
+            ccipFeatures: {
+                crossChainTransfers: true,
+                tokenBridging: true,
+                messagePassing: true,
+                liquidityPools: true
+            },
+            recommendedTestnet: {
+                chainId: 11155111,
+                name: 'Sepolia',
+                reason: 'Primary testnet with full Lotwise deployment'
+            }
         });
     });
 

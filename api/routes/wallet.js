@@ -1,6 +1,61 @@
 const express = require('express');
-const router = express.Router();
 const { ethers } = require('ethers');
+const router = express.Router();
+
+// Network configurations for testnets (CCIP enabled)
+const SUPPORTED_NETWORKS = {
+    11155111: {
+        chainId: 11155111,
+        name: 'Sepolia',
+        symbol: 'ETH',
+        network: 'testnet',
+        rpcUrl: process.env.SEPOLIA_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/ipdedLl0wIygq5b-DGbyYVKnI5MzW0v4',
+        blockExplorer: 'https://sepolia.etherscan.io',
+        ccipSelector: '16015286601757825753',
+        faucets: [
+            'https://sepoliafaucet.com/',
+            'https://faucets.chain.link/sepolia'
+        ],
+        lotwise: {
+            contractAddress: process.env.SEPOLIA_CONTRACT_ADDRESS || '',
+            deployed: false
+        }
+    },
+    80001: {
+        chainId: 80001,
+        name: 'Mumbai',
+        symbol: 'MATIC',
+        network: 'testnet',
+        rpcUrl: process.env.MUMBAI_RPC_URL || 'https://rpc-mumbai.maticvigil.com',
+        blockExplorer: 'https://mumbai.polygonscan.com',
+        ccipSelector: '12532609583862916517',
+        faucets: [
+            'https://faucet.polygon.technology/',
+            'https://faucets.chain.link/mumbai'
+        ],
+        lotwise: {
+            contractAddress: process.env.MUMBAI_CONTRACT_ADDRESS || '',
+            deployed: false
+        }
+    },
+    43113: {
+        chainId: 43113,
+        name: 'Avalanche Fuji',
+        symbol: 'AVAX',
+        network: 'testnet',
+        rpcUrl: process.env.FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc',
+        blockExplorer: 'https://testnet.snowtrace.io',
+        ccipSelector: '14767482510784806043',
+        faucets: [
+            'https://faucet.avax.network/',
+            'https://faucets.chain.link/fuji'
+        ],
+        lotwise: {
+            contractAddress: process.env.FUJI_CONTRACT_ADDRESS || '',
+            deployed: false
+        }
+    }
+};
 
 module.exports = ({ User }) => {
     // POST /api/wallet/connect
@@ -145,4 +200,4 @@ module.exports = ({ User }) => {
     });
 
     return router;
-}; 
+};

@@ -27,6 +27,18 @@ module.exports = {
       accounts: [PRIVATE_KEY],
       chainId: 11155111,
     },
+    fuji: {
+      url: process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc",
+      accounts: [PRIVATE_KEY],
+      chainId: 43113,
+      gasPrice: 25000000000, // 25 gwei
+    },
+    avalanche: {
+      url: process.env.AVALANCHE_RPC_URL || "https://api.avax.network/ext/bc/C/rpc",
+      accounts: [PRIVATE_KEY],
+      chainId: 43114,
+      gasPrice: 25000000000, // 25 gwei
+    },
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
