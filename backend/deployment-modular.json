@@ -1,0 +1,26 @@
+{
+  "network": "sepolia",
+  "chainId": "11155111",
+  "contracts": {
+    "lotwiseCore": "0x251E95927844A0f0d9f81b30633Ff24d3aAcAd3C",
+    "lotwiseMarketplace": "0x2429D3eB326bA84c14bC8475d5Dd1284Bf3F22CD",
+    "lotwiseVRF": "0xfaD5F4fc3d1C56B2a81170D10e4171cB80e104be",
+    "lotwisePriceFeeds": "0x2d14b2b653a13e20b24e067117059412a0E458BB"
+  },
+  "deployer": "0xB6583A4fEcAf5d96A54b503AE29B100cddB0E89a",
+  "configuration": {
+    "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+    "maticUsdPriceFeed": "0x0000000000000000000000000000000000000000",
+    "vrfCoordinator": "0x50ae5ea34c40e35b3cc2a78c878f06e449cbd7a5",
+    "vrfKeyHash": "0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c",
+    "vrfSubscriptionId": "33073555397084628854981323174766162084760941304577951402292181748009226081305"
+  },
+  "deployedAt": "2025-06-29T09:04:38.916Z",
+  "features": [
+    "Modular Architecture - Separate contracts for different features",
+    "LotwiseCore - Basic ERC721 property tokenization",
+    "LotwiseMarketplace - Token buying/selling with fees",
+    "LotwiseVRF - Chainlink VRF integration for randomness",
+    "LotwisePriceFeeds - Chainlink price feed integration"
+  ]
+}
